@@ -17,6 +17,8 @@ const { buildSystemPrompt, detectAudience, OPENING_MESSAGES, QUICK_REPLIES, QUAL
 const ghl = require('./services/ghl');
 const seek = require('./services/seek');
 const abs = require('./services/abs');
+const messenger = require('./services/messenger');
+const smsService = require('./services/sms');
 
 // ============================================================
 // CONFIG
@@ -49,6 +51,7 @@ sessions.on('expired', async (key, session) => {
 const app = express();
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: false, limit: '10kb' }));
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true);
@@ -365,6 +368,7 @@ app.get('/health', (req, res) => res.json({
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL },
+  channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
 app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.0', status: 'running' }));
@@ -700,6 +704,232 @@ app.post('/api/rating', async (req, res) => {
 });
 
 // ============================================================
+// MULTI-CHANNEL: Non-streaming chat function for messaging platforms
+// ============================================================
+async function channelChat(sessionKey, userMessage, platform, audience) {
+  // Get or create session
+  let s = sessions.get(sessionKey);
+  if (!s) {
+    s = {
+      id: sessionKey,
+      audience: audience || 'services',
+      messages: [],
+      qualsDiscussed: [],
+      created: Date.now(),
+      lastActivity: Date.now(),
+      contactId: null,
+      firstName: '',
+      email: '',
+      phone: '',
+      platform: platform,
+      uploadedFiles: [],
+    };
+  }
+
+  s.messages.push({ role: 'user', content: userMessage });
+  s.lastActivity = Date.now();
+
+  const seekData = seek.getJobDataSummary();
+  const absData = abs.getLabourDataSummary();
+
+  // Channel-specific system prompt additions
+  let channelNote = '';
+  if (platform === 'sms') {
+    channelNote = '\n\nCHANNEL: SMS. Keep responses SHORT — max 2-3 sentences per reply. Be direct and concise. No long paragraphs. Include the RPL form URL when relevant: https://www.3cir.com/services/rpl-assessment-form/';
+  } else if (platform === 'whatsapp') {
+    channelNote = '\n\nCHANNEL: WhatsApp. Keep responses concise — max 3-4 short paragraphs. People expect quick replies on WhatsApp. You can be slightly more detailed than SMS but still keep it punchy.';
+  } else if (platform === 'messenger' || platform === 'instagram') {
+    channelNote = `\n\nCHANNEL: ${platform === 'instagram' ? 'Instagram DM' : 'Facebook Messenger'}. Keep responses conversational and concise — max 3-4 short paragraphs. People expect chat-style replies. If they want more detail, direct them to the chatbot on the website or the RPL form.`;
+  }
+
+  const systemPrompt = buildSystemPrompt(s.audience, '', seekData, absData) + channelNote;
+  const msgs = s.messages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: platform === 'sms' ? 512 : 1024,
+      system: systemPrompt,
+      messages: msgs,
+    });
+
+    const reply = response.content?.[0]?.text || 'Sorry, I had a technical issue. Please call us on 1300 517 039.';
+
+    s.messages.push({ role: 'assistant', content: reply });
+    const bq = trackQualifications(reply, s.audience);
+    for (const q of bq) {
+      if (!s.qualsDiscussed.find(d => d.code === q.code && d.name === q.name)) s.qualsDiscussed.push(q);
+    }
+    sessions.set(sessionKey, s);
+
+    // Attempt lead capture
+    attemptLeadCapture(s).catch(e => console.error(`[Lead] ${e.message}`));
+
+    // Log to analytics
+    logAnalytics(s, `${platform}_message`).catch(() => {});
+
+    return reply;
+  } catch (err) {
+    console.error(`[${platform}] Claude error: ${err.message}`);
+    return 'Sorry, I\'m having a brief technical moment. Please call us on 1300 517 039 or visit 3cir.com to chat with us there.';
+  }
+}
+
+// Analytics helper for channels
+async function logAnalytics(s, endReason) {
+  const url = process.env.ANALYTICS_WEBHOOK_URL;
+  if (!url) return;
+  try {
+    await axios.post(url, {
+      sessionId: s.id,
+      audience: s.audience,
+      messageCount: s.messages.length,
+      userMessageCount: s.messages.filter(m => m.role === 'user').length,
+      durationMinutes: Math.round((Date.now() - s.created) / 60000),
+      leadCaptured: !!s.contactId,
+      contactId: s.contactId || null,
+      qualsDiscussed: (s.qualsDiscussed || []).map(q => q.name),
+      escalated: !!s.escalated,
+      emailSent: !!s.emailSent,
+      callbackRequested: !!s.callbackRequested,
+      endReason,
+      platform: s.platform || 'web',
+      timestamp: new Date().toISOString(),
+    }, { timeout: 10000 });
+  } catch (e) {}
+}
+
+// ============================================================
+// FACEBOOK MESSENGER + INSTAGRAM DMs
+// ============================================================
+app.get('/api/messenger', (req, res) => {
+  const result = messenger.verifyWebhook(req.query);
+  if (result.ok) return res.status(200).send(result.challenge);
+  res.status(403).send('Forbidden');
+});
+
+app.post('/api/messenger', async (req, res) => {
+  // Always respond 200 immediately — Meta requires fast acknowledgement
+  res.status(200).send('EVENT_RECEIVED');
+
+  const messages = messenger.parseMessages(req.body);
+
+  for (const msg of messages) {
+    if (!msg.text) continue;
+
+    const sessionKey = `${msg.platform}_${msg.senderId}`;
+    console.log(`[${msg.platform}] ${msg.senderId}: ${msg.text.substring(0, 80)}`);
+
+    // Show typing indicator
+    await messenger.sendTypingOn(msg.senderId);
+
+    // Get user name if first message
+    let s = sessions.get(sessionKey);
+    if (!s) {
+      const profile = await messenger.getUserProfile(msg.senderId);
+      if (profile) {
+        s = {
+          id: sessionKey,
+          audience: 'services',
+          messages: [],
+          qualsDiscussed: [],
+          created: Date.now(),
+          lastActivity: Date.now(),
+          contactId: null,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          email: '',
+          phone: '',
+          platform: msg.platform,
+          uploadedFiles: [],
+        };
+        sessions.set(sessionKey, s);
+      }
+    }
+
+    // Get response from Claude
+    const reply = await channelChat(sessionKey, msg.text, msg.platform, 'services');
+
+    // Send reply
+    await messenger.sendMessage(msg.senderId, reply, msg.platform);
+  }
+});
+
+// ============================================================
+// SMS via Twilio
+// ============================================================
+app.post('/api/sms', async (req, res) => {
+  // Respond with empty TwiML immediately
+  res.set('Content-Type', 'text/xml');
+  res.send(smsService.twimlResponse());
+
+  const msg = smsService.parseMessage(req.body);
+  if (!msg || !msg.text) return;
+
+  const sessionKey = `sms_${msg.phone}`;
+  console.log(`[SMS] ${msg.phone}: ${msg.text.substring(0, 80)}`);
+
+  // Store phone in session
+  let s = sessions.get(sessionKey);
+  if (!s) {
+    s = {
+      id: sessionKey,
+      audience: 'services',
+      messages: [],
+      qualsDiscussed: [],
+      created: Date.now(),
+      lastActivity: Date.now(),
+      contactId: null,
+      firstName: '',
+      email: '',
+      phone: msg.phone,
+      platform: 'sms',
+      uploadedFiles: [],
+    };
+    sessions.set(sessionKey, s);
+  }
+
+  const reply = await channelChat(sessionKey, msg.text, 'sms', 'services');
+  await smsService.sendSms(msg.phone, reply);
+});
+
+// ============================================================
+// WhatsApp via Twilio
+// ============================================================
+app.post('/api/whatsapp', async (req, res) => {
+  res.set('Content-Type', 'text/xml');
+  res.send(smsService.twimlResponse());
+
+  const msg = smsService.parseMessage(req.body);
+  if (!msg || !msg.text) return;
+
+  const sessionKey = `whatsapp_${msg.phone}`;
+  console.log(`[WhatsApp] ${msg.phone}: ${msg.text.substring(0, 80)}`);
+
+  let s = sessions.get(sessionKey);
+  if (!s) {
+    s = {
+      id: sessionKey,
+      audience: 'services',
+      messages: [],
+      qualsDiscussed: [],
+      created: Date.now(),
+      lastActivity: Date.now(),
+      contactId: null,
+      firstName: '',
+      email: '',
+      phone: msg.phone,
+      platform: 'whatsapp',
+      uploadedFiles: [],
+    };
+    sessions.set(sessionKey, s);
+  }
+
+  const reply = await channelChat(sessionKey, msg.text, 'whatsapp', 'services');
+  await smsService.sendWhatsApp(msg.phone, reply);
+});
+
+// ============================================================
 // SHUTDOWN
 // ============================================================
 async function shutdown(sig) {
@@ -731,6 +961,9 @@ app.listen(PORT, async () => {
   console.log(`  Callback: ${process.env.CALLBACK_WEBHOOK_URL ? 'ON' : 'OFF'}`);
   console.log(`  Analytics:${process.env.ANALYTICS_WEBHOOK_URL ? 'ON' : 'OFF'}`);
   console.log(`  Upload:   ${process.env.FILE_UPLOAD_WEBHOOK_URL ? 'ON' : 'Local only'}`);
+  console.log(`  Messenger:${process.env.META_PAGE_ACCESS_TOKEN ? 'ON' : 'OFF'}`);
+  console.log(`  SMS:      ${process.env.TWILIO_ACCOUNT_SID ? 'ON' : 'OFF'}`);
+  console.log(`  WhatsApp: ${process.env.TWILIO_WHATSAPP_FROM ? 'ON' : 'OFF'}`);
   console.log(`  SEEK:     ${seek.getCacheSize()} qualifications cached`);
   console.log(`  ABS:      ${process.env.ABS_API_KEY ? 'Live API' : 'Baseline data'}`);
   console.log('============================================================');
