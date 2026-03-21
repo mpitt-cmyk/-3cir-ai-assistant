@@ -2,7 +2,7 @@ services:
   - type: web
     name: 3cir-ai-assistant
     runtime: node
-    region: sydney
+    region: singapore
     plan: standard
     buildCommand: npm install
     startCommand: node server.js
@@ -29,3 +29,13 @@ services:
         value: f31d126e-d960-49e0-b15d-3de3045198ff
       - key: ALLOWED_ORIGINS
         value: https://www.3cir.com,https://3cir.com
+      - key: GHL_WORKFLOW_SMS_URL
+        sync: false
+      - key: GHL_WORKFLOW_EMAIL_URL
+        sync: false
+      - key: ANALYTICS_WEBHOOK_URL
+        sync: false
+      - key: ESCALATION_WEBHOOK_URL
+        sync: false
+      - key: CALLBACK_WEBHOOK_URL
+        sync: false
