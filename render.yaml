@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: 3cir-ai-assistant
+    runtime: node
+    region: sydney
+    plan: standard
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GHL_API_KEY
+        sync: false
+      - key: GHL_LOCATION_ID
+        value: gvSQJQSxdhjrpwxO72H8
+      - key: GHL_PIPELINE_ID
+        value: BTQ8BLr16G73xNT2c1Dc
+      - key: GHL_STAGE_NEW_ENQUIRIES
+        value: 449fc1c2-9c41-40ff-9c37-a09a289955b7
+      - key: GHL_STAGE_STUDY_ONLINE
+        value: 21e4c583-be5e-46da-bd34-6f36640fb6fe
+      - key: GHL_STAGE_CLOSED_WON
+        value: 4ddd3f36-adf3-4435-a7f7-25387c23d3ed
+      - key: GHL_STAGE_CLOSED_LOST
+        value: f31d126e-d960-49e0-b15d-3de3045198ff
+      - key: ALLOWED_ORIGINS
+        value: https://www.3cir.com,https://3cir.com
