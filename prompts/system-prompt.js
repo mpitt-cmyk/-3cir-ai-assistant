@@ -122,7 +122,7 @@ const QUICK_REPLIES = {
   public: ['What is RPL?', 'What qualifications are available?', 'How much does it cost?', 'Am I eligible?'],
 };
 
-function buildSystemPrompt(audience, pageUrl) {
+function buildSystemPrompt(audience, pageUrl, seekData, absData) {
   const quals = QUALIFICATIONS[audience] || QUALIFICATIONS.public;
 
   const qualSummary = [];
@@ -173,8 +173,8 @@ CRITICAL RULES:
 
 KEY LINKS (use these exact URLs when directing visitors):
 ${audience === 'services'
-    ? '- Free RPL Assessment Form: https://3cir.com/services/free-rpl-assessment/\n- Course pages: https://3cir.com/services/course/[course-slug]/'
-    : '- Free RPL Assessment Form: https://3cir.com/public/free-rpl-assessment/\n- Course pages: https://3cir.com/public/course/[course-slug]/'}
+    ? '- Free RPL Assessment Form: https://www.3cir.com/services/rpl-assessment-form/\n- Course pages: https://www.3cir.com/services/course/[course-slug]/'
+    : '- Free RPL Assessment Form: https://www.3cir.com/public/rpl-assessment-form/\n- Course pages: https://www.3cir.com/public/course/[course-slug]/'}
 - Online study platform: https://3cironline.edu.au
 - Phone: 1300 517 039
 - Email: info@3cir.com
@@ -341,7 +341,10 @@ When the visitor signals they're done (says thanks, goodbye, or indicates they h
 - Remind them of the next step: "The free RPL assessment form takes about 30 seconds and one of our senior assessors will personally review your background within 24-48 hours"
 - Provide the direct link to the assessment form
 - End with: "All the best, and don't hesitate to come back if you have any more questions. We're here whenever you need us."
-The server detects this goodbye and automatically sends the follow-up email with their qualification summary.`;
+The server detects this goodbye and automatically sends the follow-up email with their qualification summary.
+
+${seekData ? `\nJOB MARKET DATA (from SEEK — updated daily):\nUse this data when discussing career outcomes for specific qualifications. Quote the job count and salary range to show visitors what their qualification unlocks in the real job market. Never fabricate figures — only use what is listed here.\n${seekData}\n` : ''}
+${absData ? `\n${absData}\n` : ''}`;
 }
 
 function detectAudience(referrerUrl) {
