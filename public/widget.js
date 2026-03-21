@@ -73,7 +73,7 @@
       #cir-bubble-x{position:absolute;top:4px;right:8px;cursor:pointer;color:#999;font-size:16px;line-height:1}
       @keyframes cirFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
       #cir-win{position:fixed;bottom:24px;right:24px;width:400px;height:620px;max-height:calc(100vh - 48px);border-radius:16px;overflow:hidden;z-index:99999;box-shadow:0 8px 32px rgba(0,0,0,0.2);display:none;flex-direction:column;font-family:-apple-system,system-ui,sans-serif;background:#fff;animation:cirFadeIn 0.3s ease}
-      @media(max-width:420px){#cir-win{width:100vw;height:100vh;max-height:100vh;bottom:0;right:0;border-radius:0}}
+      @media(max-width:420px){#cir-win{width:100vw;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;bottom:0;right:0;left:0;top:0;border-radius:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}#cir-header{padding-top:max(12px,env(safe-area-inset-top))}#cir-input-wrap{padding-bottom:max(12px,env(safe-area-inset-bottom))}#cir-header-close{font-size:28px;padding:8px;min-width:44px;min-height:44px;justify-content:center}.cir-header-btn{min-width:40px;min-height:40px;font-size:22px;justify-content:center}}
       #cir-header{background:${T.headerBg};padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
       #cir-header-logo{width:40px;height:40px;border-radius:50%;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:2px solid ${T.primary}}
       #cir-header-logo img{width:32px;height:32px;object-fit:contain}
@@ -553,7 +553,7 @@
           var line=lines[i].trim(); if(!line.startsWith('data: ')) continue;
           try{
             var evt=JSON.parse(line.substring(6));
-            if(evt.type==='text'){fullReply+=evt.content;botBubble.textContent=fullReply;scrollToBottom();}
+            if(evt.type==='text'){fullReply+=evt.content;botBubble.textContent=stripMarkdown(fullReply);scrollToBottom();}
             else if(evt.type==='error'){botBubble.textContent=evt.content;fullReply=evt.content;}
             else if(evt.type==='done'){
               // Show RPL CTA button after quals are discussed
@@ -581,13 +581,18 @@
     setStreaming(false);
   }
 
+  // Strip markdown from bot responses (plain text only in chat)
+  function stripMarkdown(text) {
+    return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#{1,6}\s+/gm, '').replace(/^[-*+]\s+/gm, '• ');
+  }
+
   function setStreaming(v){isStreaming=v;var input=document.getElementById('cir-input');var send=document.getElementById('cir-send');var attach=document.getElementById('cir-attach');var mic=document.getElementById('cir-mic');if(input)input.disabled=v;if(send)send.disabled=v;if(attach)attach.disabled=v;if(mic){mic.disabled=v;if(v&&isRecording&&speechRecognition){speechRecognition.stop();isRecording=false;mic.classList.remove('recording');}}}
 
   function appendMessage(role,text){
     var container=document.getElementById('cir-msgs');
     if(messages.length>0){var now=Date.now();if(!appendMessage._lt||now-appendMessage._lt>120000){var ts=document.createElement('div');ts.className='cir-ts';var d=new Date();ts.textContent=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');container.appendChild(ts);}appendMessage._lt=now;}
     var div=document.createElement('div');div.className='cir-msg cir-msg-'+(role==='user'?'user':'bot');
-    var bub=document.createElement('div');bub.className='cir-bub';bub.textContent=text;
+    var bub=document.createElement('div');bub.className='cir-bub';bub.textContent=role==='user'?text:stripMarkdown(text);
     div.appendChild(bub);container.appendChild(div);scrollToBottom();return bub;
   }
 
