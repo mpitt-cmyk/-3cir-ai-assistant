@@ -234,10 +234,35 @@ async function triggerEmailWebhook(s) {
   const rplUrl = s.audience === 'services'
     ? 'https://www.3cir.com/services/rpl-assessment-form/'
     : 'https://www.3cir.com/public/rpl-assessment-form/';
+
+  // Build personalised evidence checklist based on audience
+  const evidenceChecklist = s.audience === 'services'
+    ? 'ADO Service Record or Certificate of Service\nPMKeys summary or Course Reports/ROAs\nPerformance Appraisals (PARs/SPARs)\nPosition descriptions or duty statements\nCivilian qualifications or training certificates\nReference letter from a commanding officer or supervisor'
+    : 'Resume or CV\nPosition descriptions from current and previous roles\nReference letters from supervisors\nTraining certificates and course completions\nPerformance reviews or appraisals\nAny existing qualifications';
+
+  const disclaimer = 'IMPORTANT: This summary is provided as guidance only. A formal RPL assessment would need to be completed for detailed and exact information to be provided regarding your eligibility and qualification outcomes. All qualifications are issued through Asset College (RTO 31718).';
+
   try {
-    await axios.post(u, { contactId: s.contactId, firstName: s.firstName || '', email: s.email || '', audience: s.audience, qualificationsSummary: qs, qualificationsCount: q.length, qualificationsList: q.map(x => x.name), rplFormUrl: rplUrl, chatTranscript: buildTranscript(s), conversationLength: s.messages.length, source: 'AI Chatbot' }, { timeout: 10000 });
+    await axios.post(u, {
+      contactId: s.contactId,
+      firstName: s.firstName || '',
+      email: s.email || '',
+      phone: s.phone || '',
+      audience: s.audience,
+      qualificationsSummary: qs,
+      qualificationsCount: q.length,
+      qualificationsList: q.map(x => x.name),
+      rplFormUrl: rplUrl,
+      chatTranscript: buildTranscript(s),
+      conversationLength: s.messages.length,
+      evidenceChecklist: evidenceChecklist,
+      uploadedFiles: (s.uploadedFiles || []).map(f => f.name),
+      hasUploadedFiles: (s.uploadedFiles || []).length > 0,
+      disclaimer: disclaimer,
+      source: 'AI Chatbot',
+    }, { timeout: 10000 });
     s.emailSent = true;
-    console.log(`[P2] Email sent for ${s.contactId} — ${q.length} quals`);
+    console.log(`[P2] Email sent for ${s.contactId} — ${q.length} quals, ${(s.uploadedFiles || []).length} files`);
   } catch (e) { console.error(`[P2] ${e.message}`); }
 }
 
@@ -572,10 +597,17 @@ app.post('/api/transcript', async (req, res) => {
   const transcript = buildTranscript(s);
 
   try {
+    const evidenceChecklist = s.audience === 'services'
+      ? 'ADO Service Record or Certificate of Service\nPMKeys summary or Course Reports/ROAs\nPerformance Appraisals (PARs/SPARs)\nPosition descriptions or duty statements\nCivilian qualifications or training certificates\nReference letter from a commanding officer or supervisor'
+      : 'Resume or CV\nPosition descriptions from current and previous roles\nReference letters from supervisors\nTraining certificates and course completions\nPerformance reviews or appraisals\nAny existing qualifications';
+
+    const disclaimer = 'IMPORTANT: This summary is provided as guidance only. A formal RPL assessment would need to be completed for detailed and exact information to be provided regarding your eligibility and qualification outcomes. All qualifications are issued through Asset College (RTO 31718).';
+
     await axios.post(url, {
       contactId: s.contactId || null,
       firstName: s.firstName || '',
       email: email,
+      phone: s.phone || '',
       audience: s.audience,
       qualificationsSummary: qualSummary || 'No specific qualifications discussed yet',
       qualificationsCount: quals.length,
@@ -583,6 +615,10 @@ app.post('/api/transcript', async (req, res) => {
       rplFormUrl: rplUrl,
       chatTranscript: transcript,
       conversationLength: s.messages.length,
+      evidenceChecklist: evidenceChecklist,
+      uploadedFiles: (s.uploadedFiles || []).map(f => f.name),
+      hasUploadedFiles: (s.uploadedFiles || []).length > 0,
+      disclaimer: disclaimer,
       source: 'AI Chatbot — Transcript Request',
     }, { timeout: 10000 });
 
