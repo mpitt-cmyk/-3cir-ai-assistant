@@ -2,7 +2,7 @@
   'use strict';
 
   // FIX #26: Robust API_BASE detection
-  var API_BASE = 'https://threecir-ai-assistant.onrender.com';
+  var API_BASE = '';
   var scriptEl = document.currentScript;
   if (scriptEl && scriptEl.getAttribute('data-api')) {
     API_BASE = scriptEl.getAttribute('data-api');
@@ -10,15 +10,21 @@
     var found = document.querySelector('script[src*="widget.js"]');
     if (found && found.getAttribute('data-api')) API_BASE = found.getAttribute('data-api');
   }
-   API_BASE = API_BASE.replace(/\/+$/, '');
+  if (!API_BASE) { console.error('[3CIR] No data-api attribute on widget script tag'); return; }
+  API_BASE = API_BASE.replace(/\/+$/, '');
 
   // Detect audience from current URL
   var audience = window.location.pathname.indexOf('/services') !== -1 ? 'services' : 'public';
+
+  // DIAGNOSTIC: Log audience detection so we can verify colour assignment
+  console.log('[3CIR Widget] Audience: ' + audience + ' | Path: ' + window.location.pathname + ' | URL: ' + window.location.href);
 
   // Theme colours
   var T = audience === 'services'
     ? { primary: '#F5A800', headerBg: 'linear-gradient(135deg, #1A1A1A, #2A2A2A)', headerText: '#F5A800', userBubble: '#F5A800', userText: '#1A1A1A', botBubble: '#F5F5F5', botText: '#1A1A1A', avatar: '#F5A800', avatarText: '#1A1A1A', name: '3CIR Services', subtitle: 'RPL Consultant — Online now' }
     : { primary: '#2E7D32', headerBg: 'linear-gradient(135deg, #2E7D32, #1B5E20)', headerText: '#FFFFFF', userBubble: '#2E7D32', userText: '#FFFFFF', botBubble: '#F5F5F5', botText: '#1A1A1A', avatar: '#2E7D32', avatarText: '#FFFFFF', name: '3CIR', subtitle: 'RPL Consultant — Online now' };
+
+  console.log('[3CIR Widget] Theme primary: ' + T.primary + ' (' + (audience === 'services' ? 'GOLD' : 'GREEN') + ')');
 
   var sessionId = null;
   var messages = [];
@@ -27,18 +33,103 @@
   var bubbleDismissed = false;
   var chatOpen = false;
 
-  // FIX #15: Session persistence via sessionStorage
+  // Session persistence via sessionStorage
   function saveSession() { if (sessionId) sessionStorage.setItem('3cir_sid', sessionId); }
   function loadSession() { return sessionStorage.getItem('3cir_sid'); }
   function clearSession() { sessionStorage.removeItem('3cir_sid'); }
 
   // ============================================================
-  // FIX #19: Only inject floating button on load. Lazy-load chat window on first click.
+  // P7: ABANDONED CHAT — localStorage for return visitor recognition
+  // ============================================================
+  function saveAbandonedData() {
+    if (messages.length <= 1) return; // Only opening message, not abandoned
+    var qualsFromDone = []; // Populated from SSE done events
+    try {
+      localStorage.setItem('3cir_return', JSON.stringify({
+        lastTopic: getLastTopic(),
+        audience: audience,
+        messageCount: messages.length,
+        timestamp: Date.now(),
+        leadCaptured: !!localStorage.getItem('3cir_lead_captured'),
+      }));
+    } catch (e) { /* localStorage not available */ }
+  }
+
+  function getReturnData() {
+    try {
+      var data = localStorage.getItem('3cir_return');
+      if (!data) return null;
+      var parsed = JSON.parse(data);
+      // Only use if less than 30 days old and no lead was captured
+      if (Date.now() - parsed.timestamp > 30 * 24 * 60 * 60 * 1000) {
+        localStorage.removeItem('3cir_return');
+        return null;
+      }
+      if (parsed.leadCaptured) return null;
+      return parsed;
+    } catch (e) { return null; }
+  }
+
+  function getLastTopic() {
+    // Extract the last qualification or topic discussed from messages
+    var topics = [];
+    var qualKeywords = ['leadership', 'management', 'business', 'whs', 'safety', 'project', 'hr', 'human resource',
+      'security', 'cyber', 'correctional', 'quality', 'entrepreneurship', 'marketing', 'government', 'investigation'];
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role !== 'assistant') continue;
+      var text = messages[i].content.toLowerCase();
+      for (var j = 0; j < qualKeywords.length; j++) {
+        if (text.indexOf(qualKeywords[j]) !== -1) {
+          return qualKeywords[j].charAt(0).toUpperCase() + qualKeywords[j].slice(1);
+        }
+      }
+    }
+    return 'RPL qualifications';
+  }
+
+  function markLeadCaptured() {
+    try { localStorage.setItem('3cir_lead_captured', '1'); } catch (e) {}
+  }
+
+  // ============================================================
+  // P8: AD RETARGETING — Meta Pixel + Google Ads events
+  // ============================================================
+  function fireQualInterestEvent(qualName) {
+    // Meta Pixel custom event
+    if (typeof fbq === 'function') {
+      try { fbq('trackCustom', 'QualInterest', { qualification: qualName, audience: audience }); } catch (e) {}
+    }
+    // Google Ads / GTM dataLayer push
+    if (typeof dataLayer !== 'undefined' && Array.isArray(dataLayer)) {
+      try { dataLayer.push({ event: 'qual_interest', qualification: qualName, audience: audience }); } catch (e) {}
+    }
+  }
+
+  function fireChatOpenEvent() {
+    if (typeof fbq === 'function') {
+      try { fbq('trackCustom', 'ChatOpen', { audience: audience, page: window.location.pathname }); } catch (e) {}
+    }
+    if (typeof dataLayer !== 'undefined' && Array.isArray(dataLayer)) {
+      try { dataLayer.push({ event: 'chat_open', audience: audience }); } catch (e) {}
+    }
+  }
+
+  function fireLeadCapturedEvent() {
+    if (typeof fbq === 'function') {
+      try { fbq('track', 'Lead', { content_category: 'AI Chatbot', audience: audience }); } catch (e) {}
+    }
+    if (typeof dataLayer !== 'undefined' && Array.isArray(dataLayer)) {
+      try { dataLayer.push({ event: 'chatbot_lead', audience: audience }); } catch (e) {}
+    }
+  }
+
+  // ============================================================
+  // INIT
   // ============================================================
   function init() {
     injectStyles();
     createFloatingButton();
-    setupProactiveBubble(); // FIX #16
+    setupProactiveBubble();
     setupExitIntent();
 
     // Try restore session
@@ -101,19 +192,27 @@
     document.body.appendChild(btn);
   }
 
-  // FIX #16: Proactive floating bubble after 30 seconds
+  // Proactive floating bubble after 30 seconds
   function setupProactiveBubble() {
     setTimeout(function() {
       if (chatOpen || bubbleDismissed) return;
+
+      // P7: Check for returning visitor
+      var returnData = getReturnData();
+      if (returnData && returnData.lastTopic) {
+        showBubble("Welcome back! Last time you were asking about " + returnData.lastTopic + ". Ready to pick up where we left off?");
+        return;
+      }
+
       showBubble();
     }, 30000);
   }
 
-  function showBubble() {
+  function showBubble(customMsg) {
     if (document.getElementById('cir-bubble') || chatOpen || bubbleDismissed) return;
-    var msg = audience === 'services'
+    var msg = customMsg || (audience === 'services'
       ? "Need help with your RPL options? Ask me anything."
-      : "Want to know if your experience qualifies? Chat with us.";
+      : "Want to know if your experience qualifies? Chat with us.");
     var div = document.createElement('div');
     div.id = 'cir-bubble';
     div.innerHTML = '<span id="cir-bubble-x">&times;</span>' + msg;
@@ -122,7 +221,6 @@
       div.remove(); toggleChat();
     };
     document.body.appendChild(div);
-    // Auto-hide after 10 seconds
     setTimeout(function() { if (div.parentNode) div.remove(); }, 10000);
   }
 
@@ -145,7 +243,10 @@
     win.style.display = chatOpen ? 'flex' : 'none';
     document.getElementById('cir-fab').style.display = chatOpen ? 'none' : 'flex';
 
-    if (chatOpen && messages.length === 0) startSession();
+    if (chatOpen) {
+      fireChatOpenEvent(); // P8
+      if (messages.length === 0) startSession();
+    }
   }
 
   function buildChatWindow() {
@@ -175,7 +276,7 @@
   }
 
   async function startSession() {
-    // FIX #15: Try restore existing session
+    // Try restore existing session
     var saved = loadSession();
     if (saved) {
       try {
@@ -209,7 +310,7 @@
     }
   }
 
-  // FIX #20: Retry logic for network failures
+  // Retry logic for network failures
   async function fetchWithRetry(url, opts, retries) {
     retries = retries || 2;
     for (var i = 0; i <= retries; i++) {
@@ -277,12 +378,36 @@
             } else if (evt.type === 'error') {
               botBubble.textContent = evt.content;
               fullReply = evt.content;
+            } else if (evt.type === 'done') {
+              // P8: Fire retargeting events for qualifications discussed
+              if (evt.qualsDiscussed && evt.qualsDiscussed > 0) {
+                // Extract qual names from the bot reply for retargeting
+                var qualKeywords = ['leadership', 'management', 'business', 'whs', 'safety', 'project',
+                  'hr', 'human resource', 'security', 'cyber', 'correctional', 'quality',
+                  'entrepreneurship', 'marketing', 'government', 'investigation', 'diploma', 'certificate'];
+                var replyLower = fullReply.toLowerCase();
+                for (var q = 0; q < qualKeywords.length; q++) {
+                  if (replyLower.indexOf(qualKeywords[q]) !== -1) {
+                    fireQualInterestEvent(qualKeywords[q].charAt(0).toUpperCase() + qualKeywords[q].slice(1));
+                    break; // Fire once per response to avoid spamming
+                  }
+                }
+              }
+              // P8: Fire lead event if captured
+              if (evt.leadCaptured) {
+                fireLeadCapturedEvent();
+                markLeadCaptured();
+              }
             }
           } catch (e) { /* ignore parse errors */ }
         }
       }
 
       if (fullReply) messages.push({ role: 'assistant', content: fullReply });
+
+      // P7: Save abandoned chat data after each exchange
+      saveAbandonedData();
+
     } catch (err) {
       hideTyping();
       var offline = "Our chat is temporarily offline. Please call us on 1300 517 039 or email info@3cir.com.";
@@ -293,7 +418,7 @@
     setStreaming(false);
   }
 
-  // FIX #23: Disable input during streaming
+  // Disable input during streaming
   function setStreaming(v) {
     isStreaming = v;
     var input = document.getElementById('cir-input');
@@ -304,7 +429,7 @@
 
   function appendMessage(role, text) {
     var container = document.getElementById('cir-msgs');
-    // FIX #22: Timestamp when >2 min gap
+    // Timestamp when >2 min gap
     if (messages.length > 0) {
       var now = Date.now();
       if (!appendMessage._lastTime || now - appendMessage._lastTime > 120000) {
