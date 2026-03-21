@@ -46,7 +46,11 @@ sessions.on('expired', async (key, session) => {
 // ============================================================
 const app = express();
 
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use('/public', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '10kb' }));
 
 // FIX #22 (CORS restricted to allowed origins)
