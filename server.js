@@ -436,12 +436,25 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   let reply = '';
 
   try {
-    const stream = await anthropic.messages.stream({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      system: buildSystemPrompt(s.audience, pageUrl || '', seekData, absData),
-      messages: msgs,
-    });
+    // Retry once on failure before showing error
+    let attempts = 0;
+    let stream;
+    while (attempts < 2) {
+      try {
+        stream = await anthropic.messages.stream({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 2048,
+          system: buildSystemPrompt(s.audience, pageUrl || '', seekData, absData),
+          messages: msgs,
+        });
+        break;
+      } catch (retryErr) {
+        attempts++;
+        if (attempts >= 2) throw retryErr;
+        console.log(`[Claude] Retry ${attempts} after: ${retryErr.message}`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
 
     for await (const ev of stream) {
       if (disc) { stream.controller?.abort(); break; }
