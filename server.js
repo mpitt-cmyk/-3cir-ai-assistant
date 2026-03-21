@@ -11,6 +11,7 @@ const NodeCache = require('node-cache');
 const Anthropic = require('@anthropic-ai/sdk');
 const path = require('path');
 const axios = require('axios');
+const multer = require('multer');
 
 const { buildSystemPrompt, detectAudience, OPENING_MESSAGES, QUICK_REPLIES, QUALIFICATIONS } = require('./prompts/system-prompt');
 const ghl = require('./services/ghl');
@@ -76,6 +77,13 @@ app.use('/public', (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
 }, express.static(path.join(__dirname, 'public')));
+
+// File upload handler — max 5MB, memory storage (Render has ephemeral disk)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
+  const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'text/plain'];
+  if (allowed.includes(file.mimetype) || file.originalname.match(/\.(pdf|doc|docx|jpg|jpeg|png|txt)$/i)) return cb(null, true);
+  cb(new Error('File type not supported'));
+}});
 
 // ============================================================
 // HELPERS
@@ -328,13 +336,13 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '1.3.0',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.0',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
-  features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL },
+  features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '1.3.0', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.0', status: 'running' }));
 
 app.post('/api/session', (req, res) => {
   const { referrerUrl } = req.body;
@@ -487,6 +495,157 @@ app.post('/api/lead', async (req, res) => {
 });
 
 // ============================================================
+// POST /api/upload — Resume/CV file upload from widget
+// ============================================================
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
+
+    const { sessionId } = req.body;
+    const s = sessionId ? sessions.get(sessionId) : null;
+    const file = req.file;
+
+    console.log(`[Upload] ${file.originalname} (${(file.size/1024).toFixed(0)}KB) from session ${sessionId || 'unknown'}`);
+
+    // Store file info in session
+    if (s) {
+      if (!s.uploadedFiles) s.uploadedFiles = [];
+      s.uploadedFiles.push({ name: file.originalname, size: file.size, type: file.mimetype, uploadedAt: new Date().toISOString() });
+      sessions.set(sessionId, s);
+
+      // Add GHL note if contact exists
+      if (s.contactId) {
+        await ghl.addNote(s.contactId, `Resume/CV uploaded via chatbot: ${file.originalname} (${(file.size/1024).toFixed(0)}KB, ${file.mimetype})`).catch(() => {});
+      }
+    }
+
+    // Trigger file upload webhook if configured (Rex can build a workflow that emails it to Matt)
+    const webhookUrl = process.env.FILE_UPLOAD_WEBHOOK_URL;
+    if (webhookUrl) {
+      try {
+        await axios.post(webhookUrl, {
+          contactId: s?.contactId || null,
+          firstName: s?.firstName || '',
+          email: s?.email || '',
+          phone: s?.phone || '',
+          audience: s?.audience || 'unknown',
+          fileName: file.originalname,
+          fileSize: file.size,
+          fileType: file.mimetype,
+          fileBase64: file.buffer.toString('base64'),
+          source: 'AI Chatbot — File Upload',
+        }, { timeout: 30000, maxContentLength: 10 * 1024 * 1024 });
+        console.log(`[Upload] Webhook triggered for ${file.originalname}`);
+      } catch (err) {
+        console.error(`[Upload] Webhook failed: ${err.message}`);
+      }
+    }
+
+    res.json({ ok: true, fileName: file.originalname, fileSize: file.size });
+  } catch (err) {
+    console.error(`[Upload] Error: ${err.message}`);
+    res.status(500).json({ ok: false, error: 'Upload failed' });
+  }
+});
+
+// ============================================================
+// POST /api/transcript — Email conversation transcript to visitor
+// ============================================================
+app.post('/api/transcript', async (req, res) => {
+  const { sessionId, email } = req.body;
+  if (!email) return res.status(400).json({ ok: false, error: 'Email required' });
+
+  const s = sessions.get(sessionId);
+  if (!s) return res.status(404).json({ ok: false, error: 'Session not found' });
+
+  const url = process.env.GHL_WORKFLOW_EMAIL_URL;
+  if (!url) return res.status(500).json({ ok: false, error: 'Email not configured' });
+
+  const quals = s.qualsDiscussed || [];
+  const qualSummary = quals.map(q => {
+    let price = `RPL $${q.rpl.toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
+    if (q.online) price += ` | Online Study $${q.online.toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
+    return `${q.name} (${q.code}) — ${price}`;
+  }).join('\n');
+
+  const rplUrl = s.audience === 'services' ? 'https://www.3cir.com/services/rpl-assessment-form/' : 'https://www.3cir.com/public/rpl-assessment-form/';
+  const transcript = buildTranscript(s);
+
+  try {
+    await axios.post(url, {
+      contactId: s.contactId || null,
+      firstName: s.firstName || '',
+      email: email,
+      audience: s.audience,
+      qualificationsSummary: qualSummary || 'No specific qualifications discussed yet',
+      qualificationsCount: quals.length,
+      qualificationsList: quals.map(q => q.name),
+      rplFormUrl: rplUrl,
+      chatTranscript: transcript,
+      conversationLength: s.messages.length,
+      source: 'AI Chatbot — Transcript Request',
+    }, { timeout: 10000 });
+
+    // Also attempt lead capture with this email if not already captured
+    if (!s.contactId) {
+      s.email = email;
+      await attemptLeadCapture(s).catch(() => {});
+    }
+
+    console.log(`[Transcript] Sent to ${email} for session ${sessionId}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(`[Transcript] Error: ${err.message}`);
+    res.status(500).json({ ok: false, error: 'Failed to send' });
+  }
+});
+
+// ============================================================
+// POST /api/rating — Satisfaction rating from widget
+// ============================================================
+app.post('/api/rating', async (req, res) => {
+  const { sessionId, rating } = req.body;
+  const s = sessionId ? sessions.get(sessionId) : null;
+
+  console.log(`[Rating] ${rating} from session ${sessionId || 'unknown'}`);
+
+  if (s) {
+    s.rating = rating;
+    sessions.set(sessionId, s);
+
+    // Add to GHL note if contact exists
+    if (s.contactId) {
+      const emoji = rating === 'positive' ? '👍' : '👎';
+      await ghl.addNote(s.contactId, `Chatbot satisfaction rating: ${emoji} ${rating}`).catch(() => {});
+    }
+  }
+
+  // Log to analytics
+  const analyticsUrl = process.env.ANALYTICS_WEBHOOK_URL;
+  if (analyticsUrl) {
+    try {
+      await axios.post(analyticsUrl, {
+        sessionId: sessionId,
+        audience: s?.audience || 'unknown',
+        messageCount: s?.messages?.length || 0,
+        userMessageCount: s?.messages?.filter(m => m.role === 'user').length || 0,
+        durationMinutes: s ? Math.round((Date.now() - s.created) / 60000) : 0,
+        leadCaptured: !!s?.contactId,
+        contactId: s?.contactId || null,
+        qualsDiscussed: (s?.qualsDiscussed || []).map(q => q.name),
+        escalated: !!s?.escalated,
+        emailSent: !!s?.emailSent,
+        callbackRequested: !!s?.callbackRequested,
+        endReason: 'rating_' + rating,
+        timestamp: new Date().toISOString(),
+      }, { timeout: 10000 });
+    } catch (e) {}
+  }
+
+  res.json({ ok: true });
+});
+
+// ============================================================
 // SHUTDOWN
 // ============================================================
 async function shutdown(sig) {
@@ -506,7 +665,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v1.3.0');
+  console.log('  3CIR AI ASSISTANT v2.0.0');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
@@ -517,6 +676,7 @@ app.listen(PORT, async () => {
   console.log(`  Escalate: ${process.env.ESCALATION_WEBHOOK_URL ? 'ON' : 'OFF'}`);
   console.log(`  Callback: ${process.env.CALLBACK_WEBHOOK_URL ? 'ON' : 'OFF'}`);
   console.log(`  Analytics:${process.env.ANALYTICS_WEBHOOK_URL ? 'ON' : 'OFF'}`);
+  console.log(`  Upload:   ${process.env.FILE_UPLOAD_WEBHOOK_URL ? 'ON' : 'Local only'}`);
   console.log(`  SEEK:     ${seek.getCacheSize()} qualifications cached`);
   console.log(`  ABS:      ${process.env.ABS_API_KEY ? 'Live API' : 'Baseline data'}`);
   console.log('============================================================');
