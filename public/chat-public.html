@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Chat with 3CIR — Turn Your Experience Into Qualifications</title>
+  <meta name="description" content="Chat with 3CIR about Recognition of Prior Learning. Turn your work experience into nationally recognised qualifications.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="https://www.3cir.com/wp-content/uploads/2024/04/130x60-logomyt-1-1.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+    
+    .top-bar {
+      background: linear-gradient(135deg, #1b8466, #146b52);
+      padding: 12px 20px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 2px solid #1b8466;
+    }
+    .top-bar img { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #fff; background: #fff; object-fit: contain; padding: 2px; }
+    .top-bar-text { flex: 1; }
+    .top-bar-name { color: #fff; font-weight: 700; font-size: 16px; }
+    .top-bar-sub { color: rgba(255,255,255,0.8); font-size: 12px; }
+    .top-bar a { color: #fff; text-decoration: none; font-size: 14px; padding: 6px 14px; border: 1px solid rgba(255,255,255,0.6); border-radius: 20px; transition: all 0.2s; }
+    .top-bar a:hover { background: #fff; color: #1b8466; }
+
+    .chat-wrap {
+      height: calc(100vh - 60px);
+      height: calc(100dvh - 60px);
+      width: 100%;
+      position: relative;
+    }
+
+    #cir-fab { display: none !important; }
+    #cir-bubble { display: none !important; }
+    #cir-win {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      max-height: 100% !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      display: flex !important;
+      animation: none !important;
+    }
+    #cir-header { display: none !important; }
+    
+    @media (min-width: 768px) {
+      .chat-wrap {
+        max-width: 600px;
+        margin: 0 auto;
+        height: calc(100vh - 60px);
+        height: calc(100dvh - 60px);
+        border-left: 1px solid #ddd;
+        border-right: 1px solid #ddd;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <img src="/public/logo.jpg" alt="3CIR" onerror="this.style.display='none'">
+    <div class="top-bar-text">
+      <div class="top-bar-name">3CIR</div>
+      <div class="top-bar-sub">RPL Consultant — Online now</div>
+    </div>
+    <a href="tel:1300517039">Call Us</a>
+    <a href="https://www.3cir.com/public/" target="_blank">Visit Site</a>
+  </div>
+  <div class="chat-wrap" id="chat-container"></div>
+
+  <script data-cfasync="false">
+    (function(){
+      var s = document.createElement('script');
+      s.src = '/public/widget.js';
+      s.setAttribute('data-api', window.location.origin);
+      s.setAttribute('data-audience', 'public');
+      document.body.appendChild(s);
+      s.onload = function() {
+        setTimeout(function() {
+          var fab = document.getElementById('cir-fab');
+          if (fab) fab.click();
+        }, 500);
+      };
+    })();
+  </script>
+</body>
+</html>
