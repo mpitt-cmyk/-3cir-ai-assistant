@@ -27,10 +27,10 @@
   var LOGO_URL = API_BASE + '/public/logo.jpg';
   var RPL_FORM_URL = audience === 'services' ? 'https://www.3cir.com/services/rpl-assessment-form/' : 'https://www.3cir.com/public/rpl-assessment-form/';
 
-  // Theme
+  // Theme — colours matched to website branding
   var T = audience === 'services'
-    ? { primary: '#F5A800', headerBg: 'linear-gradient(135deg, #1A1A1A, #2A2A2A)', headerText: '#F5A800', userBubble: '#F5A800', userText: '#1A1A1A', botBubble: '#F5F5F5', botText: '#1A1A1A', avatar: '#F5A800', avatarText: '#1A1A1A', name: '3CIR Services', subtitle: 'RPL Consultant — Online now', fabFill: '#1A1A1A', sendFill: '#1A1A1A' }
-    : { primary: '#2E7D32', headerBg: 'linear-gradient(135deg, #2E7D32, #1B5E20)', headerText: '#FFFFFF', userBubble: '#2E7D32', userText: '#FFFFFF', botBubble: '#F5F5F5', botText: '#1A1A1A', avatar: '#2E7D32', avatarText: '#FFFFFF', name: '3CIR', subtitle: 'RPL Consultant — Online now', fabFill: '#FFF', sendFill: '#FFF' };
+    ? { primary: '#e9ae0b', headerBg: 'linear-gradient(135deg, #1A1A1A, #2A2A2A)', headerText: '#e9ae0b', userBubble: '#e9ae0b', userText: '#1A1A1A', botBubble: '#F5F5F5', botText: '#1A1A1A', avatar: '#e9ae0b', avatarText: '#1A1A1A', name: '3CIR Services', subtitle: 'RPL Consultant — Online now', fabFill: '#1A1A1A', sendFill: '#1A1A1A' }
+    : { primary: '#1b8466', headerBg: 'linear-gradient(135deg, #1b8466, #146b52)', headerText: '#FFFFFF', userBubble: '#1b8466', userText: '#FFFFFF', botBubble: '#F5F5F5', botText: '#1A1A1A', avatar: '#1b8466', avatarText: '#FFFFFF', name: '3CIR', subtitle: 'RPL Consultant — Online now', fabFill: '#FFF', sendFill: '#FFF' };
 
   var sessionId = null, messages = [], isStreaming = false, widgetLoaded = false, bubbleDismissed = false, chatOpen = false, hasShownCta = false, hasShownRating = false;
 
@@ -117,15 +117,18 @@
       #cir-send:disabled{opacity:0.4;cursor:not-allowed}
       #cir-send svg{width:18px;height:18px;fill:${T.sendFill}}
       .cir-cta-wrap{align-self:flex-start;max-width:85%;animation:cirFadeIn 0.3s ease;margin:4px 0}
-      .cir-cta-btn{display:inline-block;padding:10px 20px;background:${T.primary};color:${audience==='services'?'#1A1A1A':'#FFF'};border-radius:24px;text-decoration:none;font-weight:700;font-size:14px;transition:transform 0.15s,box-shadow 0.15s}
-      .cir-cta-btn:hover{transform:scale(1.03);box-shadow:0 4px 12px rgba(0,0,0,0.15)}
-      .cir-file-msg{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#E8F5E9;border-radius:12px;font-size:13px;color:#2E7D32;margin:4px 0;max-width:85%;align-self:flex-end;animation:cirFadeIn 0.25s ease}
-      .cir-file-msg svg{width:16px;height:16px;fill:#2E7D32;flex-shrink:0}
+      .cir-cta-btn{display:inline-block;padding:12px 24px;background:${T.primary};color:${audience==='services'?'#1A1A1A':'#FFFFFF'} !important;border-radius:24px;text-decoration:none !important;font-weight:700;font-size:14px;transition:transform 0.15s,box-shadow 0.15s;text-align:center}
+      .cir-cta-btn:hover{transform:scale(1.03);box-shadow:0 4px 12px rgba(0,0,0,0.15);color:${audience==='services'?'#1A1A1A':'#FFFFFF'} !important}
+      .cir-cta-btn:visited{color:${audience==='services'?'#1A1A1A':'#FFFFFF'} !important}
+      .cir-file-msg{display:flex;gap:8px;align-items:center;padding:8px 12px;background:${audience === 'services' ? '#FFF8E1' : '#E8F5E9'};border-radius:12px;font-size:13px;color:${T.primary};margin:4px 0;max-width:85%;align-self:flex-end;animation:cirFadeIn 0.25s ease}
+      .cir-file-msg svg{width:16px;height:16px;fill:${T.primary};flex-shrink:0}
       .cir-rating-wrap{display:flex;gap:12px;justify-content:center;padding:12px 0;animation:cirFadeIn 0.3s ease}
       .cir-rating-btn{width:44px;height:44px;border-radius:50%;border:2px solid #ddd;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:all 0.2s}
       .cir-rating-btn:hover{border-color:${T.primary};transform:scale(1.1)}
       .cir-rating-btn.selected{border-color:${T.primary};background:${T.primary};color:${audience==='services'?'#1A1A1A':'#FFF'}}
       .cir-rating-text{font-size:12px;color:#999;text-align:center;margin-top:4px}
+      .cir-features-hint{background:${audience==='services'?'#2A2A2A':'#f0faf5'};border-radius:12px;padding:10px 14px;margin:4px 0 8px;font-size:12px;color:${audience==='services'?'#999':'#666'};line-height:1.6;animation:cirFadeIn 0.5s ease;max-width:90%;align-self:flex-start}
+      .cir-features-hint span{font-weight:600;color:${T.primary}}
       .cir-email-prompt{display:flex;gap:6px;padding:8px 16px;background:#FFF9E6;border-top:1px solid #eee;flex-shrink:0;animation:cirFadeIn 0.3s ease;align-items:center}
       .cir-email-prompt input{flex:1;border:1.5px solid #ddd;border-radius:20px;padding:8px 14px;font-size:13px;outline:none}
       .cir-email-prompt input:focus{border-color:${T.primary}}
@@ -385,6 +388,26 @@
   // ============================================================
   // RPL CTA BUTTON
   // ============================================================
+  // ============================================================
+  // FEATURES HINT — Shows after opening message
+  // ============================================================
+  var hasShownHint = false;
+  function showFeaturesHint() {
+    if (hasShownHint) return;
+    hasShownHint = true;
+    var container = document.getElementById('cir-msgs');
+    var hint = document.createElement('div');
+    hint.className = 'cir-features-hint';
+    hint.innerHTML = '<span>\ud83d\udca1 Chat tips:</span> Type below or tap <span>\ud83c\udf99\ufe0f mic</span> to speak \u2022 Tap <span>\ud83d\udcce</span> to upload your resume/CV \u2022 Tap <span>\u2709\ufe0f</span> to email this conversation';
+    container.appendChild(hint);
+    scrollToBottom();
+    // Auto-fade after 15 seconds
+    setTimeout(function() { if (hint.parentNode) { hint.style.transition = 'opacity 0.5s'; hint.style.opacity = '0'; setTimeout(function() { if (hint.parentNode) hint.remove(); }, 500); } }, 15000);
+  }
+
+  // ============================================================
+  // RPL CTA BUTTON
+  // ============================================================
   function showRplCtaButton() {
     if (hasShownCta) return;
     hasShownCta = true;
@@ -478,7 +501,7 @@
           body: JSON.stringify({ sessionId: sessionId, email: email }),
         });
         var result = await resp.json();
-        prompt.innerHTML = '<span style="color:#2E7D32;font-size:13px;padding:4px 0">&#10003; Sent! Check your inbox for your conversation summary, evidence checklist, and next steps.</span>';
+        prompt.innerHTML = '<span style="color:' + T.primary + ';font-size:13px;padding:4px 0">&#10003; Sent! Check your inbox for your conversation summary, evidence checklist, and next steps.</span>';
         setTimeout(function() { prompt.remove(); }, 5000);
       } catch (e) {
         prompt.innerHTML = '<span style="color:#CC0000;font-size:13px;padding:4px 0">Could not send — try emailing info@3cir.com</span>';
@@ -501,7 +524,7 @@
     try {
       var resp = await fetchWithRetry(API_BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({referrerUrl:window.location.href})});
       var data = await resp.json(); sessionId=data.sessionId; saveSession();
-      messages=[{role:'assistant',content:data.openingMessage}]; appendMessage('assistant',data.openingMessage); showQuickReplies(data.quickReplies||[]);
+      messages=[{role:'assistant',content:data.openingMessage}]; appendMessage('assistant',data.openingMessage); showQuickReplies(data.quickReplies||[]); showFeaturesHint();
     } catch(err) { appendMessage('assistant',"Our chat is temporarily offline. Please call us on 1300 517 039 or email info@3cir.com."); }
   }
 
