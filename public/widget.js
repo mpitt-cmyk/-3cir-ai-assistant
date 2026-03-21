@@ -2,7 +2,7 @@
   'use strict';
 
   // FIX #26: Robust API_BASE detection
-  var API_BASE = '';
+  var API_BASE = 'https://threecir-ai-assistant.onrender.com';
   var scriptEl = document.currentScript;
   if (scriptEl && scriptEl.getAttribute('data-api')) {
     API_BASE = scriptEl.getAttribute('data-api');
@@ -10,8 +10,7 @@
     var found = document.querySelector('script[src*="widget.js"]');
     if (found && found.getAttribute('data-api')) API_BASE = found.getAttribute('data-api');
   }
-  if (!API_BASE) { console.error('[3CIR] No data-api attribute on widget script tag'); return; }
-  API_BASE = API_BASE.replace(/\/+$/, '');
+   API_BASE = API_BASE.replace(/\/+$/, '');
 
   // Detect audience from current URL
   var audience = window.location.pathname.indexOf('/services') !== -1 ? 'services' : 'public';
