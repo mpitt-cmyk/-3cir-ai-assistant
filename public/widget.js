@@ -23,8 +23,8 @@
 
   console.log('[3CIR Widget v2.0] Audience: ' + audience + ' | Path: ' + pathname + ' | Theme: ' + (audience === 'services' ? 'GOLD' : 'GREEN'));
 
-  // Logo URL
-  var LOGO_URL = 'https://www.3cir.com/wp-content/uploads/2024/04/130x60-logomyt-1-1.png';
+  // Logo URL — hosted on Render server in public/ folder
+  var LOGO_URL = API_BASE + '/public/logo.jpg';
   var RPL_FORM_URL = audience === 'services' ? 'https://www.3cir.com/services/rpl-assessment-form/' : 'https://www.3cir.com/public/rpl-assessment-form/';
 
   // Theme
