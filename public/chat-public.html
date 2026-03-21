@@ -6,90 +6,35 @@
   <title>Chat with 3CIR — Turn Your Experience Into Qualifications</title>
   <meta name="description" content="Chat with 3CIR about Recognition of Prior Learning. Turn your work experience into nationally recognised qualifications.">
   <meta name="robots" content="noindex">
-  <link rel="icon" href="https://www.3cir.com/wp-content/uploads/2024/04/130x60-logomyt-1-1.png">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; width: 100%; overflow: hidden; font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
-    
-    .top-bar {
-      background: linear-gradient(135deg, #1b8466, #146b52);
-      padding: 12px 20px;
-      padding-top: max(12px, env(safe-area-inset-top));
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 2px solid #1b8466;
-    }
-    .top-bar img { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #fff; background: #fff; object-fit: contain; padding: 2px; }
-    .top-bar-text { flex: 1; }
-    .top-bar-name { color: #fff; font-weight: 700; font-size: 16px; }
-    .top-bar-sub { color: rgba(255,255,255,0.8); font-size: 12px; }
-    .top-bar a { color: #fff; text-decoration: none; font-size: 14px; padding: 6px 14px; border: 1px solid rgba(255,255,255,0.6); border-radius: 20px; transition: all 0.2s; }
-    .top-bar a:hover { background: #fff; color: #1b8466; }
-
-    .chat-wrap {
-      height: calc(100vh - 60px);
-      height: calc(100dvh - 60px);
-      width: 100%;
-      position: relative;
-    }
-
-    #cir-fab { display: none !important; }
-    #cir-bubble { display: none !important; }
-    #cir-win {
-      position: absolute !important;
-      top: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
-      bottom: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      max-height: 100% !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
-      display: flex !important;
-      animation: none !important;
-    }
-    #cir-header { display: none !important; }
-    
-    @media (min-width: 768px) {
-      .chat-wrap {
-        max-width: 600px;
-        margin: 0 auto;
-        height: calc(100vh - 60px);
-        height: calc(100dvh - 60px);
-        border-left: 1px solid #ddd;
-        border-right: 1px solid #ddd;
-      }
-    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    html{height:100%;overflow:hidden}
+    body{height:100%;overflow:hidden;font-family:-apple-system,system-ui,sans-serif;background:#f5f5f5;display:flex;flex-direction:column}
+    .top-bar{background:linear-gradient(135deg,#1b8466,#146b52);padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top));display:flex;align-items:center;gap:10px;border-bottom:2px solid #1b8466;flex-shrink:0;z-index:100000;position:relative}
+    .top-bar img{width:32px;height:32px;border-radius:50%;border:2px solid #fff;background:#fff;object-fit:contain;padding:2px}
+    .top-bar-text{flex:1;min-width:0}
+    .top-bar-name{color:#fff;font-weight:700;font-size:15px}
+    .top-bar-sub{color:rgba(255,255,255,0.8);font-size:11px}
+    .top-bar-btn{color:#fff;text-decoration:none;font-size:13px;padding:6px 12px;border:1px solid rgba(255,255,255,0.6);border-radius:20px;white-space:nowrap;flex-shrink:0}
+    .top-bar-close{color:#fff;font-size:28px;font-weight:700;text-decoration:none;padding:4px 8px;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;border:none;background:none}
+    .chat-wrap{flex:1;min-height:0;position:relative;overflow:hidden}
+    #cir-fab{display:none!important}#cir-bubble{display:none!important}
+    #cir-win{position:absolute!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:100%!important;max-height:100%!important;border-radius:0!important;box-shadow:none!important;display:flex!important;animation:none!important;z-index:1!important}
+    #cir-header{display:none!important}
+    @media(min-width:768px){body{background:#eee}.top-bar,.chat-wrap{max-width:600px;margin:0 auto;width:100%;border-left:1px solid #ddd;border-right:1px solid #ddd}}
   </style>
 </head>
 <body>
   <div class="top-bar">
     <img src="/public/logo.jpg" alt="3CIR" onerror="this.style.display='none'">
-    <div class="top-bar-text">
-      <div class="top-bar-name">3CIR</div>
-      <div class="top-bar-sub">RPL Consultant — Online now</div>
-    </div>
-    <a href="tel:1300517039">Call Us</a>
-    <a href="https://www.3cir.com/public/" target="_blank">Visit Site</a>
+    <div class="top-bar-text"><div class="top-bar-name">3CIR</div><div class="top-bar-sub">RPL Consultant — Online now</div></div>
+    <a class="top-bar-btn" href="tel:1300517039">Call</a>
+    <a class="top-bar-btn" href="https://www.3cir.com/public/">Website</a>
+    <button class="top-bar-close" onclick="history.length>1?history.back():window.close()" title="Close">&times;</button>
   </div>
-  <div class="chat-wrap" id="chat-container"></div>
-
+  <div class="chat-wrap"></div>
   <script data-cfasync="false">
-    (function(){
-      var s = document.createElement('script');
-      s.src = '/public/widget.js';
-      s.setAttribute('data-api', window.location.origin);
-      s.setAttribute('data-audience', 'public');
-      document.body.appendChild(s);
-      s.onload = function() {
-        setTimeout(function() {
-          var fab = document.getElementById('cir-fab');
-          if (fab) fab.click();
-        }, 500);
-      };
-    })();
+  (function(){var s=document.createElement('script');s.src='/public/widget.js';s.setAttribute('data-api',window.location.origin);s.setAttribute('data-audience','public');document.body.appendChild(s);s.onload=function(){setTimeout(function(){var f=document.getElementById('cir-fab');if(f)f.click()},500)};})();
   </script>
 </body>
 </html>
