@@ -91,17 +91,8 @@ function getEarningsComparison(qualLevel) {
 
 // Get formatted summary for the system prompt
 function getLabourDataSummary() {
-  const lines = [];
-  lines.push('AUSTRALIAN LABOUR MARKET DATA (ABS Cat. 6333.0, 2024):');
-  lines.push('Median weekly earnings by qualification level:');
-  for (const [level, data] of Object.entries(EARNINGS_BY_QUALIFICATION)) {
-    lines.push(`  ${level}: $${data.weeklyMedian}/week ($${data.annualMedian.toLocaleString()}/year)`);
-  }
-  lines.push('');
-  lines.push('Key insight: A Certificate IV holder earns $400/week MORE than someone without qualifications. Over a career, that is $20,800+ per year extra.');
-  lines.push('Use these figures when discussing the value of RPL — show visitors the real financial impact of getting qualified.');
-  lines.push('Source: Australian Bureau of Statistics. Do NOT fabricate figures beyond what is listed here.');
-  return lines.join('\n');
+  const pairs = Object.entries(EARNINGS_BY_QUALIFICATION).map(([level, data]) => `${level}: $${data.weeklyMedian}/wk`);
+  return 'ABS EARNINGS (Cat.6333.0): ' + pairs.join(' | ') + '. Cert IV holders earn $400/wk MORE than unqualified ($20,800+/yr extra). Source: ABS. Do NOT fabricate figures.';
 }
 
 module.exports = {
