@@ -19,6 +19,7 @@ const seek = require('./services/seek');
 const abs = require('./services/abs');
 const messenger = require('./services/messenger');
 const smsService = require('./services/sms');
+const whatsapp = require('./services/whatsapp');
 
 // ============================================================
 // CONFIG
@@ -368,7 +369,7 @@ app.get('/health', (req, res) => res.json({
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL },
-  channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
+  channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.WHATSAPP_ACCESS_TOKEN },
 }));
 
 app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.0', status: 'running' }));
@@ -894,39 +895,51 @@ app.post('/api/sms', async (req, res) => {
 });
 
 // ============================================================
-// WhatsApp via Twilio
+// WhatsApp via Meta Cloud API
 // ============================================================
+app.get('/api/whatsapp', (req, res) => {
+  const result = whatsapp.verifyWebhook(req.query);
+  if (result.ok) return res.status(200).send(result.challenge);
+  res.status(403).send('Forbidden');
+});
+
 app.post('/api/whatsapp', async (req, res) => {
-  res.set('Content-Type', 'text/xml');
-  res.send(smsService.twimlResponse());
+  // Always respond 200 immediately — Meta requires fast acknowledgement
+  res.status(200).send('EVENT_RECEIVED');
 
-  const msg = smsService.parseMessage(req.body);
-  if (!msg || !msg.text) return;
+  const messages = whatsapp.parseMessages(req.body);
 
-  const sessionKey = `whatsapp_${msg.phone}`;
-  console.log(`[WhatsApp] ${msg.phone}: ${msg.text.substring(0, 80)}`);
+  for (const msg of messages) {
+    if (!msg.text) continue;
 
-  let s = sessions.get(sessionKey);
-  if (!s) {
-    s = {
-      id: sessionKey,
-      audience: 'services',
-      messages: [],
-      qualsDiscussed: [],
-      created: Date.now(),
-      lastActivity: Date.now(),
-      contactId: null,
-      firstName: '',
-      email: '',
-      phone: msg.phone,
-      platform: 'whatsapp',
-      uploadedFiles: [],
-    };
-    sessions.set(sessionKey, s);
+    const sessionKey = `whatsapp_${msg.senderId}`;
+    console.log(`[WhatsApp] ${msg.senderId}: ${msg.text.substring(0, 80)}`);
+
+    // Mark as read (blue ticks)
+    await whatsapp.markAsRead(msg.messageId);
+
+    let s = sessions.get(sessionKey);
+    if (!s) {
+      s = {
+        id: sessionKey,
+        audience: 'services',
+        messages: [],
+        qualsDiscussed: [],
+        created: Date.now(),
+        lastActivity: Date.now(),
+        contactId: null,
+        firstName: msg.contactName || '',
+        email: '',
+        phone: msg.senderId,
+        platform: 'whatsapp',
+        uploadedFiles: [],
+      };
+      sessions.set(sessionKey, s);
+    }
+
+    const reply = await channelChat(sessionKey, msg.text, 'whatsapp', 'services');
+    await whatsapp.sendMessage(msg.senderId, reply);
   }
-
-  const reply = await channelChat(sessionKey, msg.text, 'whatsapp', 'services');
-  await smsService.sendWhatsApp(msg.phone, reply);
 });
 
 // ============================================================
@@ -963,7 +976,7 @@ app.listen(PORT, async () => {
   console.log(`  Upload:   ${process.env.FILE_UPLOAD_WEBHOOK_URL ? 'ON' : 'Local only'}`);
   console.log(`  Messenger:${process.env.META_PAGE_ACCESS_TOKEN ? 'ON' : 'OFF'}`);
   console.log(`  SMS:      ${process.env.TWILIO_ACCOUNT_SID ? 'ON' : 'OFF'}`);
-  console.log(`  WhatsApp: ${process.env.TWILIO_WHATSAPP_FROM ? 'ON' : 'OFF'}`);
+  console.log(`  WhatsApp: ${process.env.WHATSAPP_ACCESS_TOKEN ? 'ON' : 'OFF'}`);
   console.log(`  SEEK:     ${seek.getCacheSize()} qualifications cached`);
   console.log(`  ABS:      ${process.env.ABS_API_KEY ? 'Live API' : 'Baseline data'}`);
   console.log('============================================================');
