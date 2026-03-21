@@ -369,6 +369,11 @@ app.get('/health', (req, res) => res.json({
 
 app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.0', status: 'running' }));
 
+// Standalone chat pages — shareable URLs for emails, social, QR codes
+app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
+app.get('/chat/services', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
+app.get('/chat/public', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-public.html')));
+
 app.post('/api/session', (req, res) => {
   const { referrerUrl } = req.body;
   const aud = detectAudience(referrerUrl);
