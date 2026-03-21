@@ -173,6 +173,15 @@
     var bub = document.getElementById('cir-bubble'); if (bub) bub.remove();
     if (!widgetLoaded) { buildChatWindow(); widgetLoaded = true; }
     var win = document.getElementById('cir-win');
+
+    // If closing after a real conversation (3+ messages) and no rating shown yet, show rating first
+    if (chatOpen && !hasShownRating && messages.length >= 3 && messages.filter(function(m){return m.role==='user'}).length >= 1) {
+      showSatisfactionRating();
+      // Scroll to bottom so they see the rating
+      scrollToBottom();
+      return; // Don't close yet — let them rate first, then they can click X again
+    }
+
     chatOpen = !chatOpen;
     win.style.display = chatOpen ? 'flex' : 'none';
     document.getElementById('cir-fab').style.display = chatOpen ? 'none' : 'flex';
