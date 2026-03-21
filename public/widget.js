@@ -103,6 +103,13 @@
       #cir-attach{width:36px;height:36px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0.5;transition:opacity 0.15s;flex-shrink:0;padding:0}
       #cir-attach:hover{opacity:0.8}
       #cir-attach svg{width:20px;height:20px;fill:#666}
+      #cir-mic{width:36px;height:36px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0.5;transition:all 0.2s;flex-shrink:0;padding:0;border-radius:50%}
+      #cir-mic:hover{opacity:0.8}
+      #cir-mic svg{width:20px;height:20px;fill:#666}
+      #cir-mic.recording{opacity:1;background:rgba(204,0,0,0.1)}
+      #cir-mic.recording svg{fill:#CC0000}
+      @keyframes cirPulse{0%{box-shadow:0 0 0 0 rgba(204,0,0,0.3)}70%{box-shadow:0 0 0 8px rgba(204,0,0,0)}100%{box-shadow:0 0 0 0 rgba(204,0,0,0)}}
+      #cir-mic.recording{animation:cirPulse 1.5s infinite}
       #cir-input{flex:1;border:1.5px solid #ddd;border-radius:24px;padding:10px 16px;font-size:14px;font-family:inherit;outline:none;resize:none;height:42px;transition:border-color 0.2s,opacity 0.2s}
       #cir-input:focus{border-color:${T.primary}}
       #cir-input:disabled{opacity:0.5}
@@ -190,7 +197,10 @@
         <button id="cir-attach" title="Upload resume or document" aria-label="Attach file">
           <svg viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
         </button>
-        <input id="cir-input" type="text" placeholder="Type your message..." autocomplete="off"/>
+        <input id="cir-input" type="text" placeholder="Type or tap mic to speak..." autocomplete="off"/>
+        <button id="cir-mic" title="Speak your message" aria-label="Voice input" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        </button>
         <button id="cir-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
       </div>
       <input id="cir-file-input" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt" style="display:none"/>
@@ -214,6 +224,100 @@
 
     // Email transcript button
     document.getElementById('cir-email-btn').onclick = showEmailPrompt;
+
+    // Voice input — Web Speech API
+    setupVoiceInput();
+  }
+
+  // ============================================================
+  // VOICE INPUT — Speech to Text
+  // ============================================================
+  var speechRecognition = null;
+  var isRecording = false;
+
+  function setupVoiceInput() {
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.log('[3CIR Widget] Speech recognition not supported in this browser');
+      return; // Mic button stays hidden — no speech support
+    }
+
+    // Show the mic button since browser supports it
+    var micBtn = document.getElementById('cir-mic');
+    if (micBtn) micBtn.style.display = 'flex';
+
+    speechRecognition = new SpeechRecognition();
+    speechRecognition.lang = 'en-AU';
+    speechRecognition.interimResults = true;
+    speechRecognition.continuous = false;
+    speechRecognition.maxAlternatives = 1;
+
+    var finalTranscript = '';
+
+    speechRecognition.onresult = function(event) {
+      var interim = '';
+      finalTranscript = '';
+      for (var i = 0; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+      var input = document.getElementById('cir-input');
+      if (input) input.value = finalTranscript || interim;
+    };
+
+    speechRecognition.onend = function() {
+      isRecording = false;
+      var micBtn = document.getElementById('cir-mic');
+      if (micBtn) micBtn.classList.remove('recording');
+
+      // If we got a final transcript, let the user review and send
+      if (finalTranscript.trim()) {
+        var input = document.getElementById('cir-input');
+        if (input) {
+          input.value = finalTranscript.trim();
+          input.focus();
+        }
+      }
+    };
+
+    speechRecognition.onerror = function(event) {
+      isRecording = false;
+      var micBtn = document.getElementById('cir-mic');
+      if (micBtn) micBtn.classList.remove('recording');
+
+      if (event.error === 'not-allowed') {
+        appendSystemMessage('Microphone access was denied. Please allow microphone access in your browser settings to use voice input.');
+      } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        console.log('[3CIR Widget] Speech error: ' + event.error);
+      }
+    };
+
+    // Click handler
+    if (micBtn) {
+      micBtn.onclick = function() {
+        if (isStreaming) return;
+
+        if (isRecording) {
+          // Stop recording
+          speechRecognition.stop();
+          isRecording = false;
+          micBtn.classList.remove('recording');
+        } else {
+          // Start recording
+          try {
+            finalTranscript = '';
+            speechRecognition.start();
+            isRecording = true;
+            micBtn.classList.add('recording');
+          } catch (e) {
+            console.log('[3CIR Widget] Speech start error: ' + e.message);
+          }
+        }
+      };
+    }
   }
 
   // ============================================================
@@ -348,7 +452,7 @@
     var prompt = document.createElement('div');
     prompt.id = 'cir-email-prompt';
     prompt.className = 'cir-email-prompt';
-    prompt.innerHTML = '<input type="email" placeholder="Your email address" id="cir-email-input"/><button id="cir-email-send">Send</button>';
+    prompt.innerHTML = '<div style="width:100%"><div style="display:flex;gap:6px;align-items:center"><input type="email" placeholder="Your email address" id="cir-email-input" style="flex:1;border:1.5px solid #ddd;border-radius:20px;padding:8px 14px;font-size:13px;outline:none"/><button id="cir-email-send" style="padding:8px 14px;border:none;background:' + T.primary + ';color:' + (audience === 'services' ? '#1A1A1A' : '#FFF') + ';border-radius:20px;font-size:13px;font-weight:600;cursor:pointer">Send</button></div><div style="font-size:10px;color:#999;margin-top:4px;padding:0 4px">Includes your conversation, qualification summary, and personalised evidence checklist.</div></div>';
     qr.parentNode.insertBefore(prompt, qr);
 
     document.getElementById('cir-email-send').onclick = async function() {
@@ -365,7 +469,7 @@
           body: JSON.stringify({ sessionId: sessionId, email: email }),
         });
         var result = await resp.json();
-        prompt.innerHTML = '<span style="color:#2E7D32;font-size:13px;padding:4px 0">&#10003; Conversation sent to ' + email + '</span>';
+        prompt.innerHTML = '<span style="color:#2E7D32;font-size:13px;padding:4px 0">&#10003; Sent! Check your inbox for your conversation summary, evidence checklist, and next steps.</span>';
         setTimeout(function() { prompt.remove(); }, 5000);
       } catch (e) {
         prompt.innerHTML = '<span style="color:#CC0000;font-size:13px;padding:4px 0">Could not send — try emailing info@3cir.com</span>';
@@ -445,7 +549,7 @@
     setStreaming(false);
   }
 
-  function setStreaming(v){isStreaming=v;var input=document.getElementById('cir-input');var send=document.getElementById('cir-send');var attach=document.getElementById('cir-attach');if(input)input.disabled=v;if(send)send.disabled=v;if(attach)attach.disabled=v;}
+  function setStreaming(v){isStreaming=v;var input=document.getElementById('cir-input');var send=document.getElementById('cir-send');var attach=document.getElementById('cir-attach');var mic=document.getElementById('cir-mic');if(input)input.disabled=v;if(send)send.disabled=v;if(attach)attach.disabled=v;if(mic){mic.disabled=v;if(v&&isRecording&&speechRecognition){speechRecognition.stop();isRecording=false;mic.classList.remove('recording');}}}
 
   function appendMessage(role,text){
     var container=document.getElementById('cir-msgs');
