@@ -170,17 +170,17 @@ function getJobData(keyword) {
   return null;
 }
 
-// Get all cached data as a formatted string for the system prompt
+// Get all cached data as a compact string for the system prompt
 function getJobDataSummary() {
   const entries = Object.entries(cache).length > 0 ? Object.entries(cache) : Object.entries(BASELINE_DATA);
+  // Compact format — one line per qual, minimal text
   const lines = entries.map(([keyword, data]) => {
     const salary = data.salaryMin && data.salaryMax
       ? `$${(data.salaryMin / 1000).toFixed(0)}K–$${(data.salaryMax / 1000).toFixed(0)}K`
-      : 'Varies';
-    const employers = (data.topEmployers || []).join(', ');
-    return `${keyword}: ~${data.jobCount.toLocaleString()} jobs on SEEK | Salary range: ${salary} | Top employers: ${employers}`;
+      : '?';
+    return `${keyword}: ${data.jobCount.toLocaleString()} jobs, ${salary}`;
   });
-  return lines.join('\n');
+  return lines.join(' | ');
 }
 
 // Initialise cache with baseline data
