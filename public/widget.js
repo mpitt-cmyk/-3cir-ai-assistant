@@ -13,11 +13,23 @@
   if (!API_BASE) { console.error('[3CIR] No data-api attribute on widget script tag'); return; }
   API_BASE = API_BASE.replace(/\/+$/, '');
 
-  // Detect audience from current URL
-  var audience = window.location.pathname.indexOf('/services') !== -1 ? 'services' : 'public';
+  // Detect audience from current URL — robust detection with multiple checks
+  var pathname = window.location.pathname.toLowerCase();
+  var audience = 'public'; // default
+  if (pathname.indexOf('/services') !== -1) {
+    audience = 'services';
+  } else if (pathname.indexOf('/military') !== -1 || pathname.indexOf('/emergency') !== -1 || pathname.indexOf('/defence') !== -1 || pathname.indexOf('/defense') !== -1 || pathname.indexOf('/veteran') !== -1 || pathname.indexOf('/adf') !== -1) {
+    audience = 'services';
+  }
 
-  // DIAGNOSTIC: Log audience detection so we can verify colour assignment
-  console.log('[3CIR Widget] Audience: ' + audience + ' | Path: ' + window.location.pathname + ' | URL: ' + window.location.href);
+  // Allow explicit override via script tag attribute
+  var scriptTag = document.querySelector('script[src*="widget.js"]');
+  if (scriptTag && scriptTag.getAttribute('data-audience')) {
+    audience = scriptTag.getAttribute('data-audience');
+  }
+
+  // DIAGNOSTIC: Log audience detection — check DevTools console to verify colours
+  console.log('[3CIR Widget v1.2.0] Audience: ' + audience + ' | Path: ' + pathname + ' | Expected colour: ' + (audience === 'services' ? 'GOLD #F5A800' : 'GREEN #2E7D32'));
 
   // Theme colours
   var T = audience === 'services'
