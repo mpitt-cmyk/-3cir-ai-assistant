@@ -50,8 +50,8 @@ sessions.on('expired', async (key, session) => {
 // ============================================================
 const app = express();
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: false, limit: '10kb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true);
