@@ -11,6 +11,8 @@
 
 // === EVIDENCE SCANNER: Import prompt additions ===
 const { EVIDENCE_SCANNER_PROMPT_ADDITION } = require('./evidence-scanner-prompt');
+// === PATHWAY ADVISOR: Import pathway knowledge ===
+const { PATHWAY_PROMPT } = require('./pathway-advisor');
 
 const QUALIFICATIONS = {
   services: [
@@ -397,6 +399,9 @@ ${absData ? `\n${absData}\n` : ''}`;
 
   // === EVIDENCE SCANNER: Append scanner instructions to system prompt ===
   prompt += EVIDENCE_SCANNER_PROMPT_ADDITION;
+
+  // === PATHWAY ADVISOR: Append multi-qualification pathway knowledge ===
+  prompt += PATHWAY_PROMPT;
 
   return prompt;
 }
