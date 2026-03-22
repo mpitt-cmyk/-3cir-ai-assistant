@@ -20,6 +20,9 @@ const abs = require('./services/abs');
 const messenger = require('./services/messenger');
 const smsService = require('./services/sms');
 
+// === EVIDENCE SCANNER: Import the router ===
+const evidenceScanRouter = require('./routes/evidence-scan');
+
 // ============================================================
 // CONFIG
 // ============================================================
@@ -44,6 +47,10 @@ const sessions = new NodeCache({ stdTTL: 7200, checkperiod: 600 });
 sessions.on('expired', async (key, session) => {
   await handleSessionEnd(session, 'expired').catch(() => {});
 });
+
+// === EVIDENCE SCANNER: Expose session cache and GHL for the scanner ===
+global._3cir_sessionCache = sessions;
+global._3cir_ghl = ghl;
 
 // ============================================================
 // EXPRESS
@@ -80,6 +87,9 @@ app.use('/public', (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
 }, express.static(path.join(__dirname, 'public')));
+
+// === EVIDENCE SCANNER: Mount the evidence scan router ===
+app.use(evidenceScanRouter);
 
 // File upload handler — max 5MB, memory storage (Render has ephemeral disk)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
@@ -367,7 +377,7 @@ app.get('/health', (req, res) => res.json({
   status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.0',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
-  features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL },
+  features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
@@ -578,6 +588,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     if (s) {
       if (!s.uploadedFiles) s.uploadedFiles = [];
       s.uploadedFiles.push({ name: file.originalname, size: file.size, type: file.mimetype, uploadedAt: new Date().toISOString() });
+
+      // === EVIDENCE SCANNER: Store file buffer for pre-scanner analysis ===
+      s.uploadedFileBuffer = file.buffer;
+      s.uploadedFileMime = file.mimetype;
+      s.uploadedFileName = file.originalname;
+
       sessions.set(sessionId, s);
 
       // Add GHL note if contact exists
@@ -793,30 +809,6 @@ async function channelChat(sessionKey, userMessage, platform, audience) {
     console.error(`[${platform}] Claude error: ${err.message}`);
     return 'Sorry, I\'m having a brief technical moment. Please call us on 1300 517 039 or visit 3cir.com to chat with us there.';
   }
-}
-
-// Analytics helper for channels
-async function logAnalytics(s, endReason) {
-  const url = process.env.ANALYTICS_WEBHOOK_URL;
-  if (!url) return;
-  try {
-    await axios.post(url, {
-      sessionId: s.id,
-      audience: s.audience,
-      messageCount: s.messages.length,
-      userMessageCount: s.messages.filter(m => m.role === 'user').length,
-      durationMinutes: Math.round((Date.now() - s.created) / 60000),
-      leadCaptured: !!s.contactId,
-      contactId: s.contactId || null,
-      qualsDiscussed: (s.qualsDiscussed || []).map(q => q.name),
-      escalated: !!s.escalated,
-      emailSent: !!s.emailSent,
-      callbackRequested: !!s.callbackRequested,
-      endReason,
-      platform: s.platform || 'web',
-      timestamp: new Date().toISOString(),
-    }, { timeout: 10000 });
-  } catch (e) {}
 }
 
 // ============================================================
@@ -1063,6 +1055,7 @@ app.listen(PORT, async () => {
   console.log(`  WhatsApp: ${process.env.TWILIO_WHATSAPP_FROM ? 'ON' : 'OFF'}`);
   console.log(`  SEEK:     ${seek.getCacheSize()} qualifications cached`);
   console.log(`  ABS:      ${process.env.ABS_API_KEY ? 'Live API' : 'Baseline data'}`);
+  console.log(`  Evidence: ON`);
   console.log('============================================================');
 
   // Initial SEEK refresh (runs in background, doesn't block startup)
