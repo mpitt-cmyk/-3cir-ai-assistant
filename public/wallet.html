@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3CIR Qualification Wallet</title>
+<meta name="description" content="Verified qualification credentials issued through 3CIR and Asset College (RTO 31718).">
+<meta property="og:title" content="3CIR — Verified Qualification">
+<meta property="og:description" content="Nationally recognised qualification verified through 3CIR and Asset College (RTO 31718).">
+<meta property="og:type" content="profile">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--g:#1b8466;--gl:#24a882;--gd:#14614c;--gold:#F5A800;--dark:#1A1A1A;--bg:#F8FBF9;--card:#FFF;--border:#DCE8E3;--text:#1A2E26;--muted:#4A6B5C;--light:#8AA69A}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* WALLET CARD */
+.wallet-page{max-width:640px;margin:0 auto;padding:24px 16px}
+.wallet-header{text-align:center;padding:32px 24px;background:linear-gradient(135deg,var(--gd) 0%,var(--g) 50%,var(--gl) 100%);border-radius:16px 16px 0 0;position:relative;overflow:hidden}
+.wallet-header::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 80%,rgba(255,255,255,0.08) 0%,transparent 60%)}
+.wallet-header *{position:relative}
+.wallet-header .logo{font-size:28px;font-weight:900;color:#FFF;letter-spacing:3px;margin-bottom:4px}
+.wallet-header .tagline{font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:2px}
+.wallet-header .shield{font-size:48px;margin:16px 0 8px}
+.wallet-header .verified{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.15);padding:6px 16px;border-radius:20px;font-size:12px;color:rgba(255,255,255,0.9);font-weight:600;letter-spacing:1px}
+
+.wallet-body{background:var(--card);border:1px solid var(--border);border-top:none;padding:32px 28px;border-radius:0 0 16px 16px;box-shadow:0 8px 30px rgba(0,0,0,0.08)}
+
+.grad-name{font-size:28px;font-weight:800;color:var(--text);text-align:center;margin-bottom:4px}
+.grad-date{font-size:13px;color:var(--light);text-align:center;margin-bottom:24px}
+
+.qual-card{background:#F2F8F5;border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:12px}
+.qual-card .level{font-size:10px;letter-spacing:2px;font-weight:700;color:var(--g);margin-bottom:4px}
+.qual-card .name{font-size:17px;font-weight:700;color:var(--text);margin-bottom:2px}
+.qual-card .code{font-size:12px;color:var(--muted)}
+.qual-card .issued{font-size:12px;color:var(--light);margin-top:8px}
+
+.wallet-section{margin-top:24px}
+.wallet-section .label{font-size:10px;letter-spacing:2px;font-weight:700;color:var(--g);margin-bottom:8px}
+
+.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #EEF3F0;font-size:14px}
+.detail-row:last-child{border-bottom:none}
+.detail-row .key{color:var(--muted)}
+.detail-row .val{font-weight:600;color:var(--text)}
+
+.verify-box{background:linear-gradient(135deg,var(--gd),var(--g));border-radius:12px;padding:20px;text-align:center;margin-top:24px}
+.verify-box .title{font-size:12px;letter-spacing:2px;color:rgba(255,255,255,0.7);font-weight:700;margin-bottom:8px}
+.verify-box .ref{font-size:18px;font-weight:800;color:#FFF;letter-spacing:2px;font-family:monospace}
+.verify-box .note{font-size:11px;color:rgba(255,255,255,0.5);margin-top:8px}
+
+.upsell-box{background:#FFF8E1;border:1px solid #FFE082;border-radius:12px;padding:20px;margin-top:24px;text-align:center}
+.upsell-box .title{font-size:14px;font-weight:700;color:var(--dark);margin-bottom:6px}
+.upsell-box .desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px}
+.upsell-btn{display:inline-block;padding:10px 24px;background:var(--g);color:#FFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:700}
+
+.share-bar{display:flex;gap:10px;justify-content:center;margin-top:24px}
+.share-btn{padding:10px 20px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.share-linkedin{background:#0077B5;color:#FFF}
+.share-copy{background:var(--card);border:1px solid var(--border);color:var(--text);cursor:pointer}
+.share-email{background:var(--card);border:1px solid var(--border);color:var(--text)}
+
+.rto{text-align:center;font-size:10px;color:var(--light);margin-top:24px;line-height:1.5;padding-bottom:32px}
+
+/* LOADING */
+.loading{text-align:center;padding:60px 20px}
+.loading .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--g);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* NOT FOUND */
+.not-found{text-align:center;padding:80px 20px}
+.not-found h2{font-size:24px;margin-bottom:8px}
+.not-found p{color:var(--muted);font-size:15px}
+</style>
+</head>
+<body>
+
+<div class="wallet-page" id="walletPage">
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div style="color:var(--muted);font-size:14px">Loading qualification wallet...</div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// WALLET DATA — Loaded from URL parameters or API
+// ============================================================
+// URL format: /wallet?id=WALLET_ID
+// or: /wallet?ref=REFERENCE_CODE
+// or: /wallet?data=BASE64_ENCODED_JSON (for standalone use)
+// ============================================================
+
+function getParams() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    id: p.get('id'),
+    ref: p.get('ref'),
+    data: p.get('data')
+  };
+}
+
+function decodeWalletData(b64) {
+  try {
+    return JSON.parse(atob(b64));
+  } catch (e) { return null; }
+}
+
+function generateRef(name, qual, date) {
+  // Generate a deterministic reference from name + qual + date
+  const str = (name + qual + date).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) { hash = ((hash << 5) - hash) + str.charCodeAt(i); hash |= 0; }
+  const hex = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
+  return '3CIR-' + hex.substring(0, 4) + '-' + hex.substring(4, 8);
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return 'Date not recorded';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function getNextQual(quals) {
+  // Suggest the next level up
+  const levels = ['Certificate II', 'Certificate III', 'Certificate IV', 'Diploma', 'Advanced Diploma', 'Graduate Diploma'];
+  const pathways = {
+    'Leadership and Management': ['BSB40520', 'BSB50420', 'BSB60420', 'BSB80320'],
+    'Project Management': ['BSB40920', 'BSB50820', 'BSB60720', 'BSB80220'],
+    'Work Health and Safety': ['BSB30719', 'BSB41419', 'BSB51319', 'BSB60619'],
+    'Business': ['BSB20120', 'BSB30120', 'BSB40120', 'BSB50120', 'BSB60120'],
+    'Human Resource': ['BSB40420', 'BSB50320'],
+    'Security': ['CPP40719', 'CPP50619'],
+    'Government Security': ['PSP40316', 'PSP50316'],
+    'Correctional': ['CSC40122', 'CSC50122']
+  };
+
+  if (!quals || quals.length === 0) return null;
+
+  // Find the highest level qual
+  let highestLevel = -1;
+  let highestQual = quals[0];
+  let matchedPathway = null;
+
+  for (const q of quals) {
+    const lvl = levels.indexOf(q.level);
+    if (lvl > highestLevel) { highestLevel = lvl; highestQual = q; }
+
+    // Find which pathway this qual belongs to
+    for (const [pw, codes] of Object.entries(pathways)) {
+      if (codes.includes(q.code)) { matchedPathway = pw; break; }
+    }
+  }
+
+  if (!matchedPathway || highestLevel >= levels.length - 1) return null;
+
+  const nextLevel = levels[highestLevel + 1];
+  return { level: nextLevel, pathway: matchedPathway };
+}
+
+function renderWallet(data) {
+  const page = document.getElementById('walletPage');
+
+  if (!data || !data.name) {
+    page.innerHTML = `<div class="not-found"><h2>Wallet Not Found</h2><p>This qualification wallet link may be invalid or expired. Contact 3CIR for assistance.</p></div>`;
+    return;
+  }
+
+  const quals = data.qualifications || [];
+  const ref = data.ref || generateRef(data.name, quals[0]?.code || '', data.completedDate || '');
+  const nextQual = getNextQual(quals);
+
+  let qualsHtml = quals.map(q => `
+    <div class="qual-card">
+      <div class="level">${(q.level || '').toUpperCase()}</div>
+      <div class="name">${q.name}</div>
+      <div class="code">${q.code}</div>
+      <div class="issued">Completed: ${formatDate(q.completedDate || data.completedDate)}</div>
+    </div>
+  `).join('');
+
+  let upsellHtml = '';
+  if (nextQual) {
+    upsellHtml = `
+    <div class="upsell-box">
+      <div class="title">Ready for the Next Level?</div>
+      <div class="desc">Based on your ${quals[quals.length - 1]?.level || 'current qualification'}, you could progress to a ${nextQual.level} in ${nextQual.pathway}. Units from your current qualification credit towards the next level — making it faster and more affordable.</div>
+      <a href="https://www.3cir.com/public/rpl-assessment-form/" class="upsell-btn" target="_blank">Explore Your Next Qualification →</a>
+    </div>`;
+  }
+
+  const pageUrl = window.location.href;
+  const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(pageUrl)}`;
+  const emailSubject = encodeURIComponent(`${data.name} — Verified Qualification from 3CIR`);
+  const emailBody = encodeURIComponent(`Hi,\n\nI wanted to share my verified qualification credentials:\n\n${quals.map(q => q.name + ' (' + q.code + ')').join('\n')}\n\nVerification reference: ${ref}\nView online: ${pageUrl}\n\nIssued through 3CIR and Asset College (RTO 31718).`);
+
+  page.innerHTML = `
+    <div class="wallet-header">
+      <div class="logo">3CIR</div>
+      <div class="tagline">QUALIFICATION WALLET</div>
+      <div class="shield">🎓</div>
+      <div class="verified">✓ VERIFIED CREDENTIAL</div>
+    </div>
+    <div class="wallet-body">
+      <div class="grad-name">${data.name}</div>
+      <div class="grad-date">${quals.length} Qualification${quals.length !== 1 ? 's' : ''} Earned</div>
+
+      ${qualsHtml}
+
+      <div class="wallet-section">
+        <div class="label">CREDENTIAL DETAILS</div>
+        <div class="detail-row"><span class="key">Issuing RTO</span><span class="val">Asset College (RTO 31718)</span></div>
+        <div class="detail-row"><span class="key">Delivered By</span><span class="val">3CIR Pty Ltd</span></div>
+        <div class="detail-row"><span class="key">Arrangement</span><span class="val">Third-Party (ASQA Approved)</span></div>
+        <div class="detail-row"><span class="key">Assessor</span><span class="val">TAE40116 Qualified</span></div>
+        <div class="detail-row"><span class="key">Recognition Type</span><span class="val">${data.pathway || 'Recognition of Prior Learning'}</span></div>
+      </div>
+
+      <div class="verify-box">
+        <div class="title">VERIFICATION REFERENCE</div>
+        <div class="ref">${ref}</div>
+        <div class="note">Employers can verify this credential at 3cir.com or by contacting info@3cir.com</div>
+      </div>
+
+      ${upsellHtml}
+
+      <div class="share-bar">
+        <a href="${linkedinUrl}" target="_blank" class="share-btn share-linkedin">🔗 Share on LinkedIn</a>
+        <button class="share-btn share-copy" onclick="copyLink()">📋 Copy Link</button>
+        <a href="mailto:?subject=${emailSubject}&body=${emailBody}" class="share-btn share-email">✉ Email</a>
+      </div>
+    </div>
+    <div class="rto">
+      Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).<br>
+      Courage · Commitment · Comradery · Integrity · Respect
+    </div>
+  `;
+
+  // Update page title and meta
+  document.title = `${data.name} — 3CIR Qualification Wallet`;
+  const ogTitle = document.querySelector('meta[property="og:title"]');
+  if (ogTitle) ogTitle.content = `${data.name} — Verified Qualification`;
+  const ogDesc = document.querySelector('meta[property="og:description"]');
+  if (ogDesc) ogDesc.content = quals.map(q => q.name).join(', ') + ' — Verified through 3CIR and Asset College (RTO 31718).';
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const btn = document.querySelector('.share-copy');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = '📋 Copy Link'; }, 2000);
+  });
+}
+
+// ============================================================
+// INIT — Load wallet data
+// ============================================================
+(function() {
+  const params = getParams();
+
+  if (params.data) {
+    // Standalone mode — data in URL
+    const walletData = decodeWalletData(params.data);
+    renderWallet(walletData);
+  } else if (params.id || params.ref) {
+    // API mode — fetch from server (future: /api/wallet/:id)
+    // For now, show a message
+    document.getElementById('walletPage').innerHTML = `
+      <div class="not-found">
+        <h2>Wallet System</h2>
+        <p>This wallet link requires server-side lookup. Wallet pages are generated automatically when students complete their qualifications.</p>
+        <p style="margin-top:12px"><a href="https://www.3cir.com" style="color:var(--g)">Visit 3cir.com →</a></p>
+      </div>`;
+  } else {
+    // Demo mode — show sample wallet
+    renderWallet({
+      name: 'Sample Graduate',
+      completedDate: '2026-03-15',
+      pathway: 'Recognition of Prior Learning',
+      qualifications: [
+        { code: 'BSB50420', name: 'Diploma of Leadership and Management', level: 'Diploma', completedDate: '2026-03-15' },
+        { code: 'BSB40520', name: 'Certificate IV in Leadership and Management', level: 'Certificate IV', completedDate: '2026-02-28' }
+      ]
+    });
+  }
+})();
+</script>
+</body>
+</html>
