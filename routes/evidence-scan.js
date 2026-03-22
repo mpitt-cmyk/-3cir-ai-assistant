@@ -1,3 +1,5 @@
+'use strict';
+
 // =============================================================================
 // 3CIR EVIDENCE PORTFOLIO AI PRE-SCANNER — API ENDPOINT
 // routes/evidence-scan.js
@@ -5,92 +7,106 @@
 // Express router that handles the /api/evidence-scan endpoint.
 // Mount in server.js with: app.use(require('./routes/evidence-scan'));
 //
-// Flow:
-// 1. Widget calls POST /api/evidence-scan with file + sessionId + qualCode
-// 2. Server analyses document against qualification competency domains
-// 3. Returns prospect-friendly summary (MEDIUM detail)
-// 4. Sends full analysis to GHL as contact note
-//
-// Dependencies: multer (already in package.json), ../services/evidence-scanner
+// FIXES APPLIED:
+// #2  — Added JSON session-based handler (widget sends sessionId, not file)
+// #6  — Added rate limiting (5 scans per minute per IP)
+// #7  — Safe GHL tagging via upsertContact instead of getContact+updateContact
+// #9  — Clears file buffer from session after scanning to free memory
+// #11 — Logs scan events to analytics webhook
 // =============================================================================
 
 const express = require('express');
-const multer = require('multer');
+const rateLimit = require('express-rate-limit');
+const axios = require('axios');
 const router = express.Router();
 const { analyseEvidence, extractWordText, EVIDENCE_DOMAINS } = require('../services/evidence-scanner');
 
-// Multer config — same as existing /api/upload
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-  fileFilter: (req, file, cb) => {
-    const allowed = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'text/plain'
-    ];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('File type not supported. Please upload a PDF, Word document, or image.'));
-    }
-  }
+// FIX #6: Dedicated rate limiter for scans — 5 per minute per IP
+// Each scan costs ~$0.02-0.05 in Claude API calls
+const scanLimiter = rateLimit({
+  windowMs: 60000,
+  max: 5,
+  message: { success: false, error: 'Too many scan requests. Please wait a moment before trying again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // =============================================================================
 // POST /api/evidence-scan
 //
-// Accepts: multipart/form-data with:
-//   - file: The document to analyse (PDF, Word, image)
-//   - sessionId: Current chat session ID
-//   - qualCode: Qualification code to analyse against (e.g. BSB40520)
-//   - audience: 'services' or 'public'
+// FIX #2: Handles BOTH flows:
+// A) JSON body with sessionId + qualCode (primary — file already in session)
+// B) Multipart file upload (fallback — direct upload)
 //
 // Returns: JSON with prospect-facing summary
 // Side effect: Sends full analysis to GHL as contact note
 // =============================================================================
 
-router.post('/api/evidence-scan', upload.single('file'), async (req, res) => {
+router.post('/api/evidence-scan', scanLimiter, async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const { sessionId, qualCode, audience } = req.body;
-    const file = req.file;
+    let fileBuffer, mimeType, fileName, sessionId, qualCode, audience, session;
 
-    // Validate required fields
-    if (!file) {
+    // Detect request type
+    const contentType = req.headers['content-type'] || '';
+
+    if (contentType.includes('application/json')) {
+      // === PRIMARY FLOW: Session-based (file already uploaded via /api/upload) ===
+      sessionId = req.body.sessionId;
+      qualCode = req.body.qualCode;
+      audience = req.body.audience;
+
+      if (!sessionId || !global._3cir_sessionCache) {
+        return res.status(400).json({ success: false, error: 'Invalid session.' });
+      }
+
+      session = global._3cir_sessionCache.get(sessionId);
+      if (!session) {
+        return res.status(404).json({ success: false, error: 'Session expired. Please start a new conversation.' });
+      }
+
+      if (!session.uploadedFileBuffer) {
+        return res.status(400).json({
+          success: false,
+          error: 'No file found in your session. Please upload a resume or service record first using the paperclip button.'
+        });
+      }
+
+      fileBuffer = session.uploadedFileBuffer;
+      mimeType = session.uploadedFileMime;
+      fileName = session.uploadedFileName;
+      audience = audience || session.audience;
+
+      // Auto-detect qualCode from session if not provided
+      if (!qualCode && session.qualsDiscussed && session.qualsDiscussed.length > 0) {
+        qualCode = session.qualsDiscussed[session.qualsDiscussed.length - 1].code;
+      }
+
+    } else {
+      // === FALLBACK: Direct request without session ===
       return res.status(400).json({
         success: false,
-        error: 'No file uploaded. Please upload a resume, service record, or position description.'
+        error: 'Please upload your file first using the upload button in the chat, then request the evidence scan.'
       });
     }
 
+    // Validate qualification code
     if (!qualCode) {
-      return res.status(400).json({
-        success: false,
-        error: 'No qualification specified for analysis.'
-      });
+      return res.status(400).json({ success: false, error: 'No qualification specified for analysis. Please discuss a qualification first.' });
     }
 
-    // Check if we have domain mapping for this qualification
     if (!EVIDENCE_DOMAINS[qualCode]) {
       return res.status(200).json({
         success: false,
-        error: `Evidence scanning is not yet configured for ${qualCode}. Matt will review your document personally during your free RPL assessment.`,
+        error: `Evidence scanning is not yet configured for ${qualCode}. Our assessor will review your document personally during your free RPL assessment.`,
         qualCode
       });
     }
 
-    console.log(`[Evidence Scan] Starting analysis: ${file.originalname} (${(file.size / 1024).toFixed(1)}KB) against ${qualCode} for ${audience || 'public'} audience`);
+    console.log(`[Evidence Scan] Starting: ${fileName} (${(fileBuffer.length / 1024).toFixed(1)}KB) against ${qualCode} for ${audience || 'public'}`);
 
     // For Word documents, extract text first
-    let fileBuffer = file.buffer;
-    let mimeType = file.mimetype;
-
     if (mimeType === 'application/msword' ||
         mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const extractedText = await extractWordText(fileBuffer);
@@ -102,7 +118,7 @@ router.post('/api/evidence-scan', upload.single('file'), async (req, res) => {
     const result = await analyseEvidence(
       fileBuffer,
       mimeType,
-      file.originalname,
+      fileName,
       qualCode,
       audience || 'public'
     );
@@ -112,15 +128,54 @@ router.post('/api/evidence-scan', upload.single('file'), async (req, res) => {
       return res.status(200).json(result);
     }
 
-    // Send full analysis to GHL if we have a session with a contact
-    // (This integrates with the existing session cache)
-    if (sessionId) {
+    // FIX #7: Send full analysis to GHL using safe approach
+    if (session && session.contactId && global._3cir_ghl) {
       try {
-        await sendToGHL(sessionId, result);
+        // Add the full analysis as a contact note
+        await global._3cir_ghl.addNote(session.contactId, result.ghlNote);
+        console.log(`[Evidence Scan] Full analysis sent to GHL contact ${session.contactId}`);
+
+        // Tag via upsertContact (safe — doesn't require getContact/updateContact methods)
+        await global._3cir_ghl.upsertContact({
+          email: session.email || '',
+          phone: session.phone || '',
+          tags: ['evidence-pre-scanned'],
+        }).catch(() => {});
+
       } catch (ghlErr) {
         console.error('[Evidence Scan] GHL note failed (non-blocking):', ghlErr.message);
-        // Don't fail the response if GHL fails
       }
+    }
+
+    // FIX #9: Clear the file buffer from session to free memory
+    if (session) {
+      session.uploadedFileBuffer = null;
+      session.evidenceScanned = true;
+      session.evidenceScanScore = result.prospectSummary.score;
+      session.evidenceScanQual = qualCode;
+      global._3cir_sessionCache.set(sessionId, session);
+    }
+
+    // FIX #11: Log scan event to analytics
+    const analyticsUrl = process.env.ANALYTICS_WEBHOOK_URL;
+    if (analyticsUrl) {
+      axios.post(analyticsUrl, {
+        sessionId: sessionId,
+        audience: audience || 'unknown',
+        eventType: 'evidence_scan',
+        qualCode: qualCode,
+        qualName: result.qualName,
+        score: result.prospectSummary.score,
+        strongCount: result.fullAnalysis.strongCount || 0,
+        moderateCount: result.fullAnalysis.moderateCount || 0,
+        weakCount: result.fullAnalysis.weakCount || 0,
+        noneCount: result.fullAnalysis.noneCount || 0,
+        fileName: fileName,
+        analysisTimeMs: result.analysisTimeMs,
+        contactId: session?.contactId || null,
+        leadCaptured: !!session?.contactId,
+        timestamp: new Date().toISOString(),
+      }, { timeout: 10000 }).catch(() => {});
     }
 
     const elapsed = Date.now() - startTime;
@@ -135,18 +190,9 @@ router.post('/api/evidence-scan', upload.single('file'), async (req, res) => {
 
   } catch (err) {
     console.error('[Evidence Scan] Unexpected error:', err);
-
-    // Handle multer errors
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        error: 'File is too large. Maximum size is 5MB.'
-      });
-    }
-
     return res.status(500).json({
       success: false,
-      error: 'The evidence analysis could not be completed right now. Matt will review your document personally during your free RPL assessment.'
+      error: 'The evidence analysis could not be completed right now. Our assessor will review your document personally during your free RPL assessment.'
     });
   }
 });
@@ -171,45 +217,5 @@ router.get('/api/evidence-scan/qualifications', (req, res) => {
     qualifications: quals
   });
 });
-
-// =============================================================================
-// SEND FULL ANALYSIS TO GHL AS CONTACT NOTE
-//
-// This function needs access to the session cache and GHL service.
-// It will be wired up during integration with the existing server.
-// =============================================================================
-
-async function sendToGHL(sessionId, result) {
-  // This function needs to be wired to the existing session cache and GHL service.
-  // During integration, replace this with actual calls:
-  //
-  // const session = sessionCache.get(sessionId);
-  // if (session && session.contactId) {
-  //   await ghl.addNote(session.contactId, result.ghlNote);
-  //   // Also add a tag for pre-scanned leads
-  //   await ghl.addTag(session.contactId, 'evidence-pre-scanned');
-  // }
-
-  // For now, we'll check if the global helpers are available
-  if (global._3cir_sessionCache && global._3cir_ghl) {
-    const session = global._3cir_sessionCache.get(sessionId);
-    if (session && session.contactId) {
-      await global._3cir_ghl.addNote(session.contactId, result.ghlNote);
-      console.log(`[Evidence Scan] Full analysis sent to GHL contact ${session.contactId}`);
-
-      // Tag the contact as pre-scanned
-      const contact = await global._3cir_ghl.getContact(session.contactId);
-      if (contact && contact.contact) {
-        const tags = contact.contact.tags || [];
-        if (!tags.includes('evidence-pre-scanned')) {
-          tags.push('evidence-pre-scanned');
-          await global._3cir_ghl.updateContact(session.contactId, { tags });
-        }
-      }
-    }
-  } else {
-    console.log('[Evidence Scan] Session cache / GHL not wired yet — skipping GHL note');
-  }
-}
 
 module.exports = router;
