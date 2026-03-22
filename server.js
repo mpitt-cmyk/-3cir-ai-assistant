@@ -595,6 +595,9 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       s.uploadedFileMime = file.mimetype;
       s.uploadedFileName = file.originalname;
 
+      // Inject upload notification into conversation so Claude knows about it
+      s.messages.push({ role: 'user', content: `[File uploaded: ${file.originalname}]` });
+
       sessions.set(sessionId, s);
 
       // Add GHL note if contact exists
