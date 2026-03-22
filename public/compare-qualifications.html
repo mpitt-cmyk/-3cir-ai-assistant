@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compare Qualifications — 3CIR RPL</title>
+<meta name="description" content="Compare RPL qualifications side-by-side. See pricing, duration, career outcomes, salary ranges, and evidence requirements for every qualification 3CIR offers.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--g:#1b8466;--gl:#24a882;--gd:#14614c;--gg:rgba(27,132,102,0.3);--gf:rgba(27,132,102,0.1);--bg:#F8FBF9;--card:#FFF;--border:#DCE8E3;--text:#1A2E26;--muted:#4A6B5C;--light:#8AA69A;--blue:#1565C0;--purple:#7B1FA2;--gold:#F5A800}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:linear-gradient(135deg,var(--gd) 0%,var(--g) 50%,var(--gl) 100%);padding:40px 24px;text-align:center;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 70% 20%,rgba(255,255,255,0.08) 0%,transparent 60%)}
+.header *{position:relative}
+.header .tag{font-size:13px;letter-spacing:4px;color:rgba(255,255,255,0.7);font-weight:700;margin-bottom:10px}
+.header h1{font-size:clamp(24px,5vw,40px);font-weight:800;color:#FFF;line-height:1.1;margin-bottom:10px}
+.header p{font-size:15px;color:rgba(255,255,255,0.8);max-width:580px;margin:0 auto;line-height:1.6}
+.wrap{max-width:1100px;margin:0 auto;padding:32px 20px}
+.selectors{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:32px}
+.sel-card{background:var(--card);border:2px solid var(--border);border-radius:12px;padding:20px;transition:border-color 0.2s}
+.sel-card.active{border-color:var(--g)}
+.sel-card .num{display:inline-block;width:28px;height:28px;border-radius:14px;background:var(--g);color:#FFF;font-size:13px;font-weight:800;text-align:center;line-height:28px;margin-bottom:10px}
+.sel-card select{width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);outline:none;cursor:pointer;background:#FFF}
+.sel-card select:focus{border-color:var(--g);box-shadow:0 0 0 3px var(--gf)}
+select optgroup{color:var(--g);font-weight:700}
+.compare-btn{width:100%;max-width:400px;margin:0 auto 40px;display:block;padding:16px;background:linear-gradient(135deg,var(--g),var(--gl));border:none;border-radius:10px;color:#FFF;font-size:16px;font-weight:800;letter-spacing:1px;cursor:pointer;box-shadow:0 4px 20px var(--gg);transition:transform 0.1s}
+.compare-btn:active{transform:scale(0.98)}
+.results{animation:fadeIn 0.4s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+/* Comparison Table */
+.comp-table{width:100%;border-collapse:separate;border-spacing:0;margin-bottom:32px}
+.comp-table th,.comp-table td{padding:14px 16px;text-align:left;vertical-align:top;border-bottom:1px solid #EEF3F0}
+.comp-table thead th{background:var(--gd);color:#FFF;font-size:12px;letter-spacing:1.5px;font-weight:700;position:sticky;top:0}
+.comp-table thead th:first-child{border-radius:10px 0 0 0;width:180px}
+.comp-table thead th:last-child{border-radius:0 10px 0 0}
+.comp-table .row-label{font-size:12px;letter-spacing:1.5px;color:var(--g);font-weight:700;background:#F2F8F5;vertical-align:middle}
+.comp-table tbody td{font-size:14px;line-height:1.5}
+.comp-table .price{font-size:22px;font-weight:800;color:var(--gd)}
+.comp-table .price .was{font-size:13px;color:var(--light);text-decoration:line-through;font-weight:400;margin-left:6px}
+.comp-table .price .save{font-size:11px;color:var(--g);font-weight:600;display:block}
+.comp-table .salary{font-size:16px;font-weight:700;color:var(--blue)}
+.comp-table .badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:0.5px}
+.badge-high{background:#E8F5E9;color:#2E7D32}
+.badge-med{background:#FFF3E0;color:#E65100}
+.badge-low{background:#E3F2FD;color:#1565C0}
+.comp-table .evidence-list{list-style:none;padding:0}
+.comp-table .evidence-list li{padding:3px 0;font-size:13px}
+.comp-table .evidence-list li::before{content:'✓ ';color:var(--g);font-weight:700}
+.comp-table .level-tag{display:inline-block;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;background:var(--gf);color:var(--gd)}
+
+/* Cards for mobile */
+.comp-cards{display:none}
+.comp-card{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:24px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
+.comp-card h3{font-size:18px;font-weight:800;color:var(--gd);margin-bottom:4px}
+.comp-card .code{font-size:12px;color:var(--light);margin-bottom:16px}
+.comp-card .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #EEF3F0;font-size:14px}
+.comp-card .row:last-child{border:none}
+.comp-card .row .label{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:1px}
+
+.cta-section{text-align:center;margin:40px 0 20px}
+.cta-btn{display:inline-block;padding:16px 40px;background:linear-gradient(135deg,var(--g),var(--gl));border:none;border-radius:10px;color:#FFF;font-size:15px;font-weight:800;cursor:pointer;text-decoration:none;box-shadow:0 4px 20px var(--gg)}
+.popular{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:24px;margin-bottom:32px}
+.popular h3{font-size:14px;letter-spacing:2px;color:var(--g);font-weight:700;margin-bottom:16px}
+.pop-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.pop-item{background:#F2F8F5;border-radius:8px;padding:12px 16px;cursor:pointer;border:1px solid transparent;transition:all 0.2s;font-size:13px}
+.pop-item:hover{border-color:var(--g);background:var(--gf)}
+.pop-item .name{font-weight:700;color:var(--text)}
+.pop-item .detail{font-size:11px;color:var(--light);margin-top:2px}
+.rto{text-align:center;font-size:11px;color:var(--light);margin-top:24px;padding-bottom:32px}
+.hidden{display:none}
+@media(max-width:768px){
+  .comp-table-wrap{display:none}
+  .comp-cards{display:block}
+  .selectors{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="tag">3CIR — QUALIFICATION COMPARISON</div>
+  <h1>Compare Qualifications Side-by-Side</h1>
+  <p>Not sure which qualification is right for you? Select up to three and compare pricing, career outcomes, completion time, and evidence requirements — all in one view.</p>
+</div>
+
+<div class="wrap">
+
+  <!-- Popular Comparisons -->
+  <div class="popular">
+    <h3>POPULAR COMPARISONS</h3>
+    <div class="pop-grid">
+      <div class="pop-item" onclick="quickCompare('BSB40520','BSB50420','BSB60420')">
+        <div class="name">Leadership Pathway</div>
+        <div class="detail">Cert IV → Diploma → Adv Diploma</div>
+      </div>
+      <div class="pop-item" onclick="quickCompare('BSB40920','BSB50820','BSB60720')">
+        <div class="name">Project Management Pathway</div>
+        <div class="detail">Cert IV → Diploma → Adv Diploma</div>
+      </div>
+      <div class="pop-item" onclick="quickCompare('BSB30719','BSB41419','BSB51319')">
+        <div class="name">WHS Pathway</div>
+        <div class="detail">Cert III → Cert IV → Diploma</div>
+      </div>
+      <div class="pop-item" onclick="quickCompare('CPP40719','CPP41519','CPP50619')">
+        <div class="name">Security Pathway</div>
+        <div class="detail">Sec Mgmt → Risk Analysis → Risk Mgmt</div>
+      </div>
+      <div class="pop-item" onclick="quickCompare('BSB40520','BSB40920','BSB41419')">
+        <div class="name">Most Popular Cert IVs</div>
+        <div class="detail">Leadership vs Project Mgmt vs WHS</div>
+      </div>
+      <div class="pop-item" onclick="quickCompare('BSB80120','BSB80220','BSB80320')">
+        <div class="name">Graduate Diplomas</div>
+        <div class="detail">Learning vs Portfolio vs Strategic</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selectors -->
+  <div class="selectors">
+    <div class="sel-card" id="sel1"><div class="num">1</div><select id="q1" onchange="updateCard(1)"><option value="">Select first qualification...</option></select></div>
+    <div class="sel-card" id="sel2"><div class="num">2</div><select id="q2" onchange="updateCard(2)"><option value="">Select second qualification...</option></select></div>
+    <div class="sel-card" id="sel3"><div class="num">3</div><select id="q3" onchange="updateCard(3)"><option value="">Optional — select third qualification...</option></select></div>
+  </div>
+
+  <button class="compare-btn" onclick="compare()">COMPARE QUALIFICATIONS</button>
+
+  <div id="resultsSection" class="hidden"></div>
+
+  <div class="cta-section">
+    <p style="color:var(--muted);margin-bottom:16px;font-size:15px">Still not sure? Chat with our AI assistant — it'll recommend the best qualification based on your experience.</p>
+    <a href="https://www.3cir.com/public/" target="_blank" class="cta-btn">Start Your Free RPL Assessment →</a>
+  </div>
+
+  <div class="rto">Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).</div>
+</div>
+
+<script>
+// PUBLIC SITE RPL FULL PRICES — no discount
+const QUALS=[
+{c:"BSB20120",n:"Certificate II in Workplace Skills",l:"Certificate II",p:550,dp:495,cat:"Business",sal:"$45K–$55K",roles:"Administration Officer, Office Assistant, Data Entry",dur:"1–2 weeks",demand:"Steady",evidence:["Resume or CV","Position descriptions","Employment references","Workplace examples"],units:6,desc:"Entry-level business skills including communication, teamwork, and basic workplace practices."},
+{c:"BSB30120",n:"Certificate III in Business",l:"Certificate III",p:850,dp:765,cat:"Business",sal:"$50K–$65K",roles:"Office Manager, Executive Assistant, Business Administrator",dur:"2–3 weeks",demand:"High",evidence:["Resume or CV","Position descriptions","Employment references","Workplace documents you've created","Training certificates"],units:9,desc:"Core business operations including customer service, records management, and business technology."},
+{c:"BSB30220",n:"Certificate III in Entrepreneurship and New Business",l:"Certificate III",p:850,dp:765,cat:"Business",sal:"$50K–$65K",roles:"Small Business Owner, Startup Coordinator, Business Development",dur:"2–3 weeks",demand:"Growing",evidence:["Business plans or proposals","Financial records","Marketing materials","Customer testimonials"],units:8,desc:"Skills for starting and running a small business, including innovation, marketing, and financial management."},
+{c:"BSB30719",n:"Certificate III in Work Health and Safety",l:"Certificate III",p:850,dp:765,cat:"WHS",sal:"$55K–$70K",roles:"WHS Officer, Safety Coordinator, Compliance Assistant",dur:"2–3 weeks",demand:"High",evidence:["Resume or CV","WHS documentation you've managed","Incident reports","Risk assessments","Safety training records"],units:9,desc:"Foundation WHS skills including hazard identification, risk assessment, and safety compliance."},
+{c:"BSB40120",n:"Certificate IV in Business",l:"Certificate IV",p:1150,dp:1035,cat:"Business",sal:"$60K–$80K",roles:"Business Manager, Operations Coordinator, Team Supervisor",dur:"2–4 weeks",demand:"High",evidence:["Resume or CV","Position descriptions","Performance reviews","Reports you've written","Project documentation"],units:10,desc:"Advanced business skills including project coordination, stakeholder management, and operational planning."},
+{c:"BSB40320",n:"Certificate IV in Entrepreneurship and New Business",l:"Certificate IV",p:1150,dp:1035,cat:"Business",sal:"$60K–$85K",roles:"Business Owner, Franchise Operator, Innovation Manager",dur:"2–4 weeks",demand:"Growing",evidence:["Business plans","Financial statements","Marketing campaigns","Growth strategies"],units:10,desc:"Advanced entrepreneurship including business modelling, market analysis, and growth strategy."},
+{c:"BSB40420",n:"Certificate IV in Human Resource Management",l:"Certificate IV",p:1150,dp:1035,cat:"HR",sal:"$65K–$85K",roles:"HR Coordinator, Recruitment Officer, People & Culture Advisor",dur:"2–4 weeks",demand:"High",evidence:["Resume or CV","HR policies you've developed","Recruitment documentation","Performance management records","Training materials"],units:10,desc:"HR fundamentals including recruitment, employee relations, WHS obligations, and performance management."},
+{c:"BSB40520",n:"Certificate IV in Leadership and Management",l:"Certificate IV",p:1150,dp:1035,cat:"Leadership",sal:"$65K–$90K",roles:"Team Leader, Supervisor, Section Manager, Platoon Sergeant",dur:"2–3 weeks",demand:"Very High",evidence:["Resume or CV","Service record / PMKeys","Position descriptions","Performance reviews","Leadership course certificates"],units:12,desc:"The most popular qualification for military and emergency services personnel. Covers team leadership, operational planning, and performance management."},
+{c:"BSB40820",n:"Certificate IV in Marketing and Communication",l:"Certificate IV",p:1150,dp:1035,cat:"Business",sal:"$60K–$80K",roles:"Marketing Coordinator, Communications Officer, Content Manager",dur:"2–4 weeks",demand:"High",evidence:["Resume or CV","Marketing campaigns","Communications plans","Social media strategies","Content examples"],units:10,desc:"Marketing strategy, digital communications, market research, and stakeholder engagement."},
+{c:"BSB40920",n:"Certificate IV in Project Management Practice",l:"Certificate IV",p:1150,dp:1035,cat:"Project Mgmt",sal:"$70K–$95K",roles:"Project Coordinator, PMO Analyst, Works Supervisor",dur:"2–3 weeks",demand:"Very High",evidence:["Resume or CV","Project plans or schedules","Status reports","Budget tracking","Stakeholder communications"],units:10,desc:"Project fundamentals including scope, time, cost, and stakeholder management. Ideal for those managing projects in any sector."},
+{c:"BSB41419",n:"Certificate IV in Work Health and Safety",l:"Certificate IV",p:1150,dp:1035,cat:"WHS",sal:"$70K–$90K",roles:"WHS Advisor, Safety Manager, Compliance Officer",dur:"2–3 weeks",demand:"Very High",evidence:["Resume or CV","WHS management plans","Risk assessments","Audit reports","Incident investigation reports","Training records"],units:10,desc:"Advanced WHS including risk management systems, legislative compliance, and safety culture development."},
+{c:"22603VIC",n:"Certificate IV in Cyber Security",l:"Certificate IV",p:1150,dp:1035,cat:"Cyber",sal:"$75K–$110K",roles:"Cyber Security Analyst, SOC Operator, Information Security Officer",dur:"2–4 weeks",demand:"Very High",evidence:["Resume or CV","Security certifications","Incident response documentation","Network security experience","Risk assessment reports"],units:11,desc:"Cyber security fundamentals including threat analysis, incident response, network security, and governance."},
+{c:"CPP40719",n:"Certificate IV in Security Management",l:"Certificate IV",p:1150,dp:1035,cat:"Security",sal:"$65K–$90K",roles:"Security Manager, Loss Prevention Manager, Security Consultant",dur:"2–4 weeks",demand:"High",evidence:["Resume or CV","Security plans","Risk assessments","Incident reports","Operational procedures"],units:12,desc:"Security operations management including risk assessment, emergency planning, and security technology."},
+{c:"CPP41519",n:"Certificate IV in Security Risk Analysis",l:"Certificate IV",p:1150,dp:1035,cat:"Security",sal:"$70K–$95K",roles:"Security Risk Analyst, Threat Assessor, Intelligence Analyst",dur:"2–4 weeks",demand:"High",evidence:["Resume or CV","Risk analysis reports","Threat assessments","Security surveys","Intelligence products"],units:10,desc:"Specialised security risk analysis including threat assessment, vulnerability analysis, and risk treatment."},
+{c:"PSP40316",n:"Certificate IV in Government Security",l:"Certificate IV",p:1150,dp:1035,cat:"Government",sal:"$70K–$95K",roles:"Government Security Advisor, Vetting Officer, Protective Security Officer",dur:"2–4 weeks",demand:"Steady",evidence:["Resume or CV","Security clearance evidence","PSPF documentation","Vetting reports","Security assessment records"],units:9,desc:"Government protective security including personnel vetting, physical security, and information security within the PSPF framework."},
+{c:"PSP40416",n:"Certificate IV in Government Investigations",l:"Certificate IV",p:1150,dp:1035,cat:"Government",sal:"$70K–$95K",roles:"Government Investigator, Compliance Investigator, Regulatory Officer",dur:"2–4 weeks",demand:"Steady",evidence:["Resume or CV","Investigation reports","Evidence collection records","Witness statements","Regulatory compliance documentation"],units:9,desc:"Government investigation skills including evidence gathering, interviewing, reporting, and regulatory compliance."},
+{c:"CSC40122",n:"Certificate IV in Correctional Practice",l:"Certificate IV",p:1250,dp:1125,cat:"Corrections",sal:"$65K–$85K",roles:"Correctional Officer, Case Manager, Community Corrections Officer",dur:"2–4 weeks",demand:"High",evidence:["Resume or CV","Position descriptions","Case management records","Incident reports","Training records"],units:14,desc:"Correctional operations including offender management, case planning, security procedures, and rehabilitation."},
+{c:"BSB50120",n:"Diploma of Business",l:"Diploma",p:1500,dp:1350,cat:"Business",sal:"$75K–$100K",roles:"Business Manager, Operations Manager, General Manager",dur:"3–4 weeks",demand:"High",evidence:["Resume or CV","Business reports","Strategic plans","Operational budgets","Stakeholder management examples"],units:12,desc:"Advanced business management including strategic planning, financial management, and organisational development."},
+{c:"BSB50320",n:"Diploma of Human Resources Management",l:"Diploma",p:1500,dp:1350,cat:"HR",sal:"$80K–$110K",roles:"HR Manager, People & Culture Manager, Workforce Planning Manager",dur:"3–4 weeks",demand:"High",evidence:["Resume or CV","HR strategies","Workforce plans","Industrial relations documentation","Change management examples"],units:12,desc:"Strategic HR management including workforce planning, industrial relations, and organisational change."},
+{c:"BSB50420",n:"Diploma of Leadership and Management",l:"Diploma",p:1500,dp:1350,cat:"Leadership",sal:"$80K–$120K",roles:"Operations Manager, Department Head, Senior Manager, Company Commander",dur:"2–4 weeks",demand:"Very High",evidence:["Resume or CV","Service record / PMKeys","Strategic plans","Operational reports","Performance management records","Budget management evidence"],units:12,desc:"Senior leadership and management skills. The natural step up from the Certificate IV. Covers strategic planning, change management, and organisational performance."},
+{c:"BSB50820",n:"Diploma of Project Management",l:"Diploma",p:1500,dp:1350,cat:"Project Mgmt",sal:"$85K–$130K",roles:"Project Manager, Program Coordinator, PMO Manager",dur:"2–4 weeks",demand:"Very High",evidence:["Resume or CV","Project management plans","Risk registers","Earned value reports","Stakeholder management plans","Closure reports"],units:12,desc:"Professional project management including advanced scheduling, risk management, procurement, and stakeholder engagement."},
+{c:"BSB50920",n:"Diploma of Quality Auditing",l:"Diploma",p:1500,dp:1350,cat:"Business",sal:"$75K–$100K",roles:"Quality Auditor, Compliance Manager, Quality Systems Manager",dur:"3–4 weeks",demand:"Steady",evidence:["Resume or CV","Audit reports","Quality management plans","Non-conformance reports","Corrective action records"],units:10,desc:"Quality auditing across management systems including ISO standards, compliance frameworks, and continuous improvement."},
+{c:"BSB51319",n:"Diploma of Work Health and Safety",l:"Diploma",p:1500,dp:1350,cat:"WHS",sal:"$85K–$115K",roles:"WHS Manager, Safety Director, Risk Manager",dur:"3–4 weeks",demand:"Very High",evidence:["Resume or CV","WHS management systems","Strategic safety plans","Legislative compliance records","Risk management frameworks","Audit reports"],units:12,desc:"Strategic WHS management including system design, legislative compliance, risk frameworks, and safety culture transformation."},
+{c:"CPP50619",n:"Diploma of Security Risk Management",l:"Diploma",p:1500,dp:1350,cat:"Security",sal:"$85K–$120K",roles:"Security Risk Manager, Security Director, Threat Intelligence Manager",dur:"3–4 weeks",demand:"High",evidence:["Resume or CV","Security risk management plans","Threat assessments","Business continuity plans","Security audit reports"],units:12,desc:"Advanced security risk management including enterprise risk frameworks, business continuity, and strategic security planning."},
+{c:"PSP50316",n:"Diploma of Government Security",l:"Diploma",p:1500,dp:1350,cat:"Government",sal:"$85K–$115K",roles:"Senior Security Advisor, PSPF Advisor, Security Branch Manager",dur:"3–4 weeks",demand:"Steady",evidence:["Resume or CV","PSPF assessments","Security plans","Vetting management records","Agency security documentation"],units:10,desc:"Senior government security including PSPF governance, protective security planning, and agency security management."},
+{c:"PSP50416",n:"Diploma of Government Investigations",l:"Diploma",p:1500,dp:1350,cat:"Government",sal:"$85K–$115K",roles:"Senior Investigator, Investigation Team Leader, Integrity Officer",dur:"3–4 weeks",demand:"Steady",evidence:["Resume or CV","Complex investigation reports","Prosecution briefs","Team management records","Legislative compliance documentation"],units:10,desc:"Advanced government investigation including complex case management, prosecution preparation, and investigation team leadership."},
+{c:"CSC50122",n:"Diploma of Correctional Administration",l:"Diploma",p:1750,dp:1575,cat:"Corrections",sal:"$80K–$105K",roles:"Senior Correctional Officer, Unit Manager, Programs Manager",dur:"3–5 weeks",demand:"Steady",evidence:["Resume or CV","Management reports","Program development records","Staff supervision evidence","Operational planning documents"],units:12,desc:"Correctional management including program development, staff supervision, operational planning, and strategic offender management."},
+{c:"BSB60120",n:"Advanced Diploma of Business",l:"Advanced Diploma",p:2150,dp:1935,cat:"Business",sal:"$90K–$130K",roles:"General Manager, Executive Manager, Business Development Director",dur:"3–5 weeks",demand:"High",evidence:["Resume or CV","Strategic business plans","Financial analysis reports","Change management programs","Executive-level presentations"],units:10,desc:"Executive-level business management including corporate governance, strategic analysis, and organisational transformation."},
+{c:"BSB60420",n:"Advanced Diploma of Leadership and Management",l:"Advanced Diploma",p:2150,dp:1935,cat:"Leadership",sal:"$95K–$140K",roles:"Director, Executive Manager, Regional Manager, Battalion XO",dur:"3–5 weeks",demand:"Very High",evidence:["Resume or CV","Strategic leadership examples","Organisational change programs","Executive reports","High-level stakeholder management evidence"],units:10,desc:"Executive leadership including organisational strategy, transformational leadership, and corporate governance. The senior leadership qualification."},
+{c:"BSB60720",n:"Advanced Diploma of Program Management",l:"Advanced Diploma",p:2150,dp:1935,cat:"Project Mgmt",sal:"$100K–$150K",roles:"Program Manager, Portfolio Manager, Delivery Director",dur:"3–5 weeks",demand:"High",evidence:["Resume or CV","Program management plans","Portfolio reports","Benefits realisation records","Multi-project coordination evidence"],units:10,desc:"Program and portfolio management including benefits management, governance frameworks, and multi-project coordination."},
+{c:"BSB60619",n:"Advanced Diploma of Work Health and Safety",l:"Advanced Diploma",p:2150,dp:1935,cat:"WHS",sal:"$100K–$140K",roles:"Head of Safety, WHS Director, Chief Risk Officer",dur:"3–5 weeks",demand:"High",evidence:["Resume or CV","Strategic WHS frameworks","Executive safety reports","Organisational safety culture programs","Legislative compliance strategies"],units:10,desc:"Executive WHS leadership including strategic safety governance, organisational culture change, and enterprise risk management."},
+{c:"BSB80120",n:"Graduate Diploma of Management (Learning)",l:"Graduate Diploma",p:3650,dp:3285,cat:"Leadership",sal:"$110K–$160K",roles:"Learning & Development Director, Chief Learning Officer, Training Director",dur:"4–6 weeks",demand:"Steady",evidence:["Resume or CV","L&D strategies","Training program designs","Evaluation frameworks","Organisational learning initiatives"],units:8,desc:"Strategic management of organisational learning including learning design, evaluation, and capability development at the enterprise level."},
+{c:"BSB80220",n:"Graduate Diploma of Portfolio Management",l:"Graduate Diploma",p:3650,dp:3285,cat:"Project Mgmt",sal:"$120K–$180K",roles:"Head of PMO, Portfolio Director, Chief Delivery Officer",dur:"4–6 weeks",demand:"Growing",evidence:["Resume or CV","Portfolio management frameworks","Investment governance records","Strategic alignment documentation","Benefits management plans"],units:8,desc:"Enterprise portfolio governance including investment decision-making, strategic alignment, and portfolio performance optimisation."},
+{c:"BSB80320",n:"Graduate Diploma of Strategic Leadership",l:"Graduate Diploma",p:3650,dp:3285,cat:"Leadership",sal:"$120K–$180K",roles:"CEO, Executive Director, Chief Operating Officer",dur:"4–6 weeks",demand:"Growing",evidence:["Resume or CV","Strategic plans","Board papers","Organisational transformation evidence","Governance frameworks","Executive decision-making records"],units:8,desc:"The highest qualification we offer. Strategic leadership at the C-suite level including governance, transformation, and executive decision-making."}
+];
+
+const LEVELS=["Certificate II","Certificate III","Certificate IV","Diploma","Advanced Diploma","Graduate Diploma"];
+
+function buildOptions(){
+  let h='<option value="">Select qualification...</option>';
+  LEVELS.forEach(lv=>{
+    const qs=QUALS.filter(q=>q.l===lv);
+    if(qs.length){h+=`<optgroup label="${lv}">`; qs.forEach(q=>{h+=`<option value="${q.c}">${q.n}</option>`}); h+='</optgroup>';}
+  });
+  return h;
+}
+
+function fmt(n){return '$'+n.toLocaleString('en-AU')}
+function demandBadge(d){
+  if(d==='Very High')return '<span class="badge badge-high">Very High Demand</span>';
+  if(d==='High')return '<span class="badge badge-high">High Demand</span>';
+  if(d==='Growing')return '<span class="badge badge-med">Growing</span>';
+  return '<span class="badge badge-low">Steady</span>';
+}
+
+function init(){
+  const opts=buildOptions();
+  document.getElementById('q1').innerHTML=opts;
+  document.getElementById('q2').innerHTML=opts.replace('Select qualification...','Select second qualification...');
+  document.getElementById('q3').innerHTML=opts.replace('Select qualification...','Optional — select third...');
+}
+
+function updateCard(n){
+  const el=document.getElementById('sel'+n);
+  const val=document.getElementById('q'+n).value;
+  el.classList.toggle('active',!!val);
+}
+
+function quickCompare(a,b,c){
+  document.getElementById('q1').value=a; updateCard(1);
+  document.getElementById('q2').value=b; updateCard(2);
+  document.getElementById('q3').value=c; updateCard(3);
+  compare();
+}
+
+function compare(){
+  const codes=[document.getElementById('q1').value,document.getElementById('q2').value,document.getElementById('q3').value].filter(Boolean);
+  if(codes.length<2){alert('Please select at least two qualifications to compare.');return;}
+  const qs=codes.map(c=>QUALS.find(q=>q.c===c)).filter(Boolean);
+  if(qs.length<2)return;
+
+  // Table view
+  let tableHTML=`<div class="comp-table-wrap"><table class="comp-table"><thead><tr><th>ATTRIBUTE</th>${qs.map(q=>`<th>${q.n}</th>`).join('')}</tr></thead><tbody>`;
+
+  // Level
+  tableHTML+=`<tr><td class="row-label">LEVEL</td>${qs.map(q=>`<td><span class="level-tag">${q.l}</span></td>`).join('')}</tr>`;
+  // Code
+  tableHTML+=`<tr><td class="row-label">CODE</td>${qs.map(q=>`<td style="font-family:monospace;font-size:13px;color:var(--muted)">${q.c}</td>`).join('')}</tr>`;
+  // Description
+  tableHTML+=`<tr><td class="row-label">OVERVIEW</td>${qs.map(q=>`<td style="font-size:13px;color:var(--muted)">${q.desc}</td>`).join('')}</tr>`;
+  // RPL Price
+  tableHTML+=`<tr><td class="row-label">RPL PRICE</td>${qs.map(q=>`<td><div class="price">${fmt(q.dp)}<span class="was">${fmt(q.p)}</span></div><div class="price"><span class="save">You save ${fmt(q.p-q.dp)} (10% off)</span></div></td>`).join('')}</tr>`;
+  // Duration
+  tableHTML+=`<tr><td class="row-label">COMPLETION</td>${qs.map(q=>`<td style="font-weight:600">${q.dur}</td>`).join('')}</tr>`;
+  // Units
+  tableHTML+=`<tr><td class="row-label">UNITS</td>${qs.map(q=>`<td>${q.units} units</td>`).join('')}</tr>`;
+  // Salary
+  tableHTML+=`<tr><td class="row-label">SALARY RANGE</td>${qs.map(q=>`<td class="salary">${q.sal}</td>`).join('')}</tr>`;
+  // Roles
+  tableHTML+=`<tr><td class="row-label">CAREER ROLES</td>${qs.map(q=>`<td style="font-size:13px">${q.roles}</td>`).join('')}</tr>`;
+  // Demand
+  tableHTML+=`<tr><td class="row-label">JOB DEMAND</td>${qs.map(q=>`<td>${demandBadge(q.demand)}</td>`).join('')}</tr>`;
+  // Category
+  tableHTML+=`<tr><td class="row-label">CATEGORY</td>${qs.map(q=>`<td style="font-size:13px;color:var(--muted)">${q.cat}</td>`).join('')}</tr>`;
+  // Evidence
+  tableHTML+=`<tr><td class="row-label">EVIDENCE NEEDED</td>${qs.map(q=>`<td><ul class="evidence-list">${q.evidence.map(e=>`<li>${e}</li>`).join('')}</ul></td>`).join('')}</tr>`;
+
+  tableHTML+='</tbody></table></div>';
+
+  // Card view (mobile)
+  let cardsHTML='<div class="comp-cards">';
+  qs.forEach(q=>{
+    cardsHTML+=`<div class="comp-card">
+      <span class="level-tag" style="margin-bottom:8px">${q.l}</span>
+      <h3>${q.n}</h3>
+      <div class="code">${q.c}</div>
+      <div class="row"><div class="label">RPL PRICE</div><div class="price" style="font-size:18px">${fmt(q.dp)} <span class="was">${fmt(q.p)}</span></div></div>
+      <div class="row"><div class="label">COMPLETION</div><div style="font-weight:600">${q.dur}</div></div>
+      <div class="row"><div class="label">SALARY RANGE</div><div class="salary" style="font-size:14px">${q.sal}</div></div>
+      <div class="row"><div class="label">JOB DEMAND</div><div>${demandBadge(q.demand)}</div></div>
+      <div class="row"><div class="label">CAREER ROLES</div><div style="font-size:13px">${q.roles}</div></div>
+      <div class="row"><div class="label">UNITS</div><div>${q.units} units</div></div>
+      <div class="row"><div class="label">EVIDENCE</div><div><ul class="evidence-list">${q.evidence.map(e=>`<li>${e}</li>`).join('')}</ul></div></div>
+    </div>`;
+  });
+  cardsHTML+='</div>';
+
+  const section=document.getElementById('resultsSection');
+  section.innerHTML='<div class="results">'+tableHTML+cardsHTML+'</div>';
+  section.classList.remove('hidden');
+  section.scrollIntoView({behavior:'smooth'});
+}
+
+init();
+</script>
+</body>
+</html>
