@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workforce ROI Calculator — 3CIR RPL</title>
+<meta name="description" content="Calculate the return on investment from qualifying your team through Recognition of Prior Learning. Real pricing. Volume discounts for bulk enrolments.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--g:#1b8466;--gl:#24a882;--gd:#14614c;--gg:rgba(27,132,102,0.3);--gf:rgba(27,132,102,0.1);--bg:#F8FBF9;--card:#FFF;--border:#DCE8E3;--text:#1A2E26;--muted:#4A6B5C;--light:#8AA69A;--blue:#1565C0;--purple:#7B1FA2}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:linear-gradient(135deg,var(--gd) 0%,var(--g) 50%,var(--gl) 100%);padding:40px 24px;text-align:center;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 80%,rgba(255,255,255,0.08) 0%,transparent 60%)}
+.header *{position:relative}
+.header .tag{font-size:13px;letter-spacing:4px;color:rgba(255,255,255,0.7);font-weight:700;margin-bottom:10px}
+.header h1{font-size:clamp(26px,5vw,42px);font-weight:800;color:#FFF;line-height:1.1;margin-bottom:10px}
+.header p{font-size:15px;color:rgba(255,255,255,0.8);max-width:560px;margin:0 auto;line-height:1.6}
+.wrap{max-width:780px;margin:0 auto;padding:32px 20px}
+label.section{font-size:12px;letter-spacing:2px;color:var(--g);font-weight:700;display:block;margin-bottom:8px}
+input,select{width:100%;padding:12px 16px;background:#FFF;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;outline:none}
+input:focus,select:focus{border-color:var(--g);box-shadow:0 0 0 3px var(--gf)}
+input::placeholder{color:var(--light)}
+select optgroup{color:var(--g);font-weight:700}
+.qual-row{display:flex;gap:10px;margin-bottom:10px;align-items:center}
+.qual-row select{flex:1;font-size:14px;padding:12px 12px;cursor:pointer}
+.qual-row input{width:70px;padding:12px 8px;font-size:14px;text-align:center}
+.qual-row .lbl{font-size:12px;color:var(--light);width:36px}
+.qual-row .rm{background:none;border:none;color:var(--light);cursor:pointer;font-size:18px;padding:4px 8px}
+.add-btn{background:none;border:1px dashed var(--border);border-radius:8px;color:var(--g);padding:10px 20px;cursor:pointer;font-size:13px;width:100%;margin-top:4px;font-weight:600}
+.vol-box{background:var(--card);border-radius:10px;padding:16px 20px;margin:28px 0;border:1px solid var(--border)}
+.vol-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.vol-pill{background:#F2F6F4;border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:12px;color:var(--light)}
+.vol-pill.active{background:var(--gf);border-color:var(--g);color:var(--gd);font-weight:700}
+.calc-btn{width:100%;padding:16px;background:linear-gradient(135deg,var(--g),var(--gl));border:none;border-radius:10px;color:#FFF;font-size:16px;font-weight:800;letter-spacing:1px;cursor:pointer;margin-bottom:40px;box-shadow:0 4px 20px var(--gg);transition:transform 0.1s}
+.calc-btn:active{transform:scale(0.98)}
+.results{animation:fadeIn 0.4s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.card{background:var(--card);border-radius:12px;padding:28px 24px;margin-bottom:20px;border:1px solid var(--border);box-shadow:0 2px 12px rgba(0,0,0,0.04)}
+.line-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #EEF3F0;font-size:14px}
+.line-item .name{font-weight:500}
+.line-item .sub{color:var(--light);font-size:12px}
+.line-item .val{font-weight:600}
+.discount-line .name{color:var(--g);font-weight:600}
+.discount-line .val{color:var(--g);font-weight:700}
+.total-line{display:flex;justify-content:space-between;padding:14px 0 0;font-size:18px}
+.total-line .val{font-weight:800;color:var(--gd);font-size:22px}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px}
+.metric{background:var(--card);border-radius:10px;padding:20px;border:1px solid var(--border);text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
+.metric .label{font-size:11px;letter-spacing:2px;color:var(--light);font-weight:700;margin-bottom:8px}
+.metric .value{font-size:26px;font-weight:800}
+.metric .sub{font-size:12px;color:var(--light);margin-top:4px}
+.roi-box{background:linear-gradient(135deg,var(--gd),var(--g));border-radius:12px;padding:32px 24px;margin-bottom:20px;text-align:center;box-shadow:0 4px 24px var(--gg)}
+.roi-box .tag{font-size:12px;letter-spacing:3px;color:rgba(255,255,255,0.7);font-weight:700;margin-bottom:16px}
+.roi-box .big{font-size:clamp(36px,8vw,56px);font-weight:900;color:#FFF;line-height:1}
+.roi-stats{display:flex;justify-content:center;gap:40px;margin-top:20px;flex-wrap:wrap}
+.roi-stat .num{font-size:28px;font-weight:800}
+.roi-stat .lbl{font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:1px}
+.proposal-btn{width:100%;padding:16px;background:var(--card);border:2px solid var(--g);border-radius:10px;color:var(--gd);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:12px}
+.cta-btn{display:block;width:100%;padding:16px;background:linear-gradient(135deg,var(--g),var(--gl));border:none;border-radius:10px;color:#FFF;font-size:15px;font-weight:800;cursor:pointer;text-align:center;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 20px var(--gg)}
+.proposal{background:#FFF;border-radius:12px;padding:40px 32px;margin-top:24px;border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,0.06)}
+.proposal .head{border-bottom:3px solid var(--g);padding-bottom:20px;margin-bottom:24px}
+.proposal table{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:13px}
+.proposal th{text-align:left;padding:8px 4px;color:var(--muted);font-weight:600;border-bottom:2px solid var(--border)}
+.proposal td{padding:8px 4px;border-bottom:1px solid #EEF3F0}
+.proposal .code{font-size:11px;color:var(--light)}
+.proposal .total-row td{border-top:2px solid var(--text);padding:10px 4px;font-weight:800;font-size:15px}
+.prop-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px}
+.prop-metric{background:#F2F8F5;border-radius:8px;padding:16px;text-align:center}
+.prop-roi{background:var(--gd);border-radius:8px;padding:20px;text-align:center;margin-bottom:24px}
+.footer-note{font-size:12px;color:var(--light);border-top:1px solid var(--border);padding-top:16px}
+.footer-note p{margin:0 0 4px}
+.rto{text-align:center;margin-top:24px;font-size:11px;color:var(--light)}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="tag">3CIR — EMPLOYER RPL</div>
+  <h1>Workforce ROI Calculator</h1>
+  <p>Calculate the return on investment from qualifying your team through Recognition of Prior Learning. Real pricing. Volume discounts for bulk enrolments.</p>
+</div>
+
+<div class="wrap">
+  <div style="margin-bottom:24px">
+    <label class="section">ORGANISATION NAME</label>
+    <input id="orgName" placeholder="Your company name">
+  </div>
+
+  <div style="margin-bottom:12px">
+    <label class="section">QUALIFICATIONS FOR YOUR TEAM</label>
+    <div id="qualLines"></div>
+    <button class="add-btn" onclick="addLine()">+ Add another qualification</button>
+  </div>
+
+  <div class="vol-box">
+    <label class="section" style="margin-bottom:0">VOLUME DISCOUNTS — THE MORE STAFF, THE MORE YOU SAVE</label>
+    <div class="vol-pills" id="volPills"></div>
+  </div>
+
+  <button class="calc-btn" onclick="calculate()">CALCULATE ROI</button>
+
+  <div id="resultsSection" class="hidden results"></div>
+</div>
+
+<script>
+const QUALS=[
+{c:"BSB20120",n:"Certificate II in Workplace Skills",l:"Certificate II",p:550,s:5000},
+{c:"BSB30120",n:"Certificate III in Business",l:"Certificate III",p:850,s:8000},
+{c:"BSB30220",n:"Certificate III in Entrepreneurship and New Business",l:"Certificate III",p:850,s:8000},
+{c:"BSB30719",n:"Certificate III in Work Health and Safety",l:"Certificate III",p:850,s:8000},
+{c:"BSB40120",n:"Certificate IV in Business",l:"Certificate IV",p:1150,s:10000},
+{c:"BSB40320",n:"Certificate IV in Entrepreneurship and New Business",l:"Certificate IV",p:1150,s:10000},
+{c:"BSB40420",n:"Certificate IV in Human Resource Management",l:"Certificate IV",p:1150,s:10000},
+{c:"BSB40520",n:"Certificate IV in Leadership and Management",l:"Certificate IV",p:1150,s:12000},
+{c:"BSB40820",n:"Certificate IV in Marketing and Communication",l:"Certificate IV",p:1150,s:10000},
+{c:"BSB40920",n:"Certificate IV in Project Management Practice",l:"Certificate IV",p:1150,s:12000},
+{c:"BSB41419",n:"Certificate IV in Work Health and Safety",l:"Certificate IV",p:1150,s:10000},
+{c:"22603VIC",n:"Certificate IV in Cyber Security",l:"Certificate IV",p:1150,s:15000},
+{c:"CPP40719",n:"Certificate IV in Security Management",l:"Certificate IV",p:1150,s:10000},
+{c:"CPP41519",n:"Certificate IV in Security Risk Analysis",l:"Certificate IV",p:1150,s:10000},
+{c:"PSP40316",n:"Certificate IV in Government Security",l:"Certificate IV",p:1150,s:10000},
+{c:"PSP40416",n:"Certificate IV in Government Investigations",l:"Certificate IV",p:1150,s:10000},
+{c:"CSC40122",n:"Certificate IV in Correctional Practice",l:"Certificate IV",p:1250,s:10000},
+{c:"BSB50120",n:"Diploma of Business",l:"Diploma",p:1500,s:15000},
+{c:"BSB50320",n:"Diploma of Human Resources Management",l:"Diploma",p:1500,s:15000},
+{c:"BSB50420",n:"Diploma of Leadership and Management",l:"Diploma",p:1500,s:18000},
+{c:"BSB50820",n:"Diploma of Project Management",l:"Diploma",p:1500,s:18000},
+{c:"BSB50920",n:"Diploma of Quality Auditing",l:"Diploma",p:1500,s:12000},
+{c:"BSB51319",n:"Diploma of Work Health and Safety",l:"Diploma",p:1500,s:15000},
+{c:"CPP50619",n:"Diploma of Security Risk Management",l:"Diploma",p:1500,s:15000},
+{c:"PSP50316",n:"Diploma of Government Security",l:"Diploma",p:1500,s:15000},
+{c:"PSP50416",n:"Diploma of Government Investigations",l:"Diploma",p:1500,s:15000},
+{c:"CSC50122",n:"Diploma of Correctional Administration",l:"Diploma",p:1750,s:15000},
+{c:"BSB60120",n:"Advanced Diploma of Business",l:"Advanced Diploma",p:2150,s:22000},
+{c:"BSB60420",n:"Advanced Diploma of Leadership and Management",l:"Advanced Diploma",p:2150,s:25000},
+{c:"BSB60720",n:"Advanced Diploma of Program Management",l:"Advanced Diploma",p:2150,s:22000},
+{c:"BSB60619",n:"Advanced Diploma of Work Health and Safety",l:"Advanced Diploma",p:2150,s:22000},
+{c:"BSB80120",n:"Graduate Diploma of Management (Learning)",l:"Graduate Diploma",p:3650,s:30000},
+{c:"BSB80220",n:"Graduate Diploma of Portfolio Management",l:"Graduate Diploma",p:3650,s:30000},
+{c:"BSB80320",n:"Graduate Diploma of Strategic Leadership",l:"Graduate Diploma",p:3650,s:30000}
+];
+
+const TIERS=[{min:1,max:4,d:0,l:"1–4 staff"},{min:5,max:9,d:0.05,l:"5–9 staff (5% off)"},{min:10,max:19,d:0.10,l:"10–19 staff (10% off)"},{min:20,max:49,d:0.15,l:"20–49 staff (15% off)"},{min:50,max:9999,d:0.20,l:"50+ staff (20% off)"}];
+const LEVELS=["Certificate II","Certificate III","Certificate IV","Diploma","Advanced Diploma","Graduate Diploma"];
+
+let lines=[{q:"",c:1}];
+
+function fmt(n){return new Intl.NumberFormat('en-AU',{style:'currency',currency:'AUD',maximumFractionDigits:0}).format(n)}
+function getTier(count){for(const t of TIERS)if(count>=t.min&&count<=t.max)return t;return TIERS[0]}
+
+function buildOptions(){
+  let html='<option value="">Select qualification...</option>';
+  LEVELS.forEach(lv=>{
+    const qs=QUALS.filter(q=>q.l===lv);
+    if(qs.length){
+      html+=`<optgroup label="${lv}">`;
+      qs.forEach(q=>{html+=`<option value="${q.c}">${q.n} — ${fmt(q.p)} per person</option>`});
+      html+='</optgroup>';
+    }
+  });
+  return html;
+}
+
+function renderLines(){
+  const el=document.getElementById('qualLines');
+  const opts=buildOptions();
+  el.innerHTML=lines.map((line,i)=>`
+    <div class="qual-row">
+      <select onchange="lines[${i}].q=this.value" style="color:${line.q?'var(--text)':'var(--light)'}">${opts.replace(`value="${line.q}"`,`value="${line.q}" selected`)}</select>
+      <input type="number" min="1" max="999" value="${line.c}" onchange="lines[${i}].c=Math.max(1,parseInt(this.value)||1)">
+      <span class="lbl">staff</span>
+      ${lines.length>1?`<button class="rm" onclick="removeLine(${i})">✕</button>`:''}
+    </div>
+  `).join('');
+}
+
+function renderPills(totalPeople){
+  document.getElementById('volPills').innerHTML=TIERS.map(t=>{
+    const active=totalPeople>=t.min&&totalPeople<=t.max;
+    return `<div class="vol-pill${active?' active':''}">${t.l}</div>`;
+  }).join('');
+}
+
+function addLine(){lines.push({q:"",c:1});renderLines()}
+function removeLine(i){if(lines.length>1){lines.splice(i,1);renderLines()}}
+
+function calculate(){
+  const valid=lines.filter(l=>l.q);
+  if(!valid.length)return;
+  let totalPeople=0,totalCost=0,totalSalary=0;
+  const lr=[];
+  valid.forEach(line=>{
+    const q=QUALS.find(x=>x.c===line.q);if(!q)return;
+    totalPeople+=line.c;
+    lr.push({q,count:line.c,unit:q.p,total:q.p*line.c,sal:q.s*line.c});
+    totalCost+=q.p*line.c;totalSalary+=q.s*line.c;
+  });
+  if(!lr.length)return;
+
+  const tier=getTier(totalPeople);
+  const volDisc=totalCost*tier.d;
+  const final=totalCost-volDisc;
+  const retention=totalPeople*15000*0.12;
+  const compliance=totalPeople*2000;
+  const roi=totalSalary+retention+compliance;
+  const mult=final>0?(roi/final):0;
+  const payback=roi>0?Math.ceil((final/roi)*12):0;
+  const avg=totalPeople>0?Math.round(final/totalPeople):0;
+  const org=document.getElementById('orgName').value||'Your Organisation';
+  const today=new Date().toLocaleDateString('en-AU',{year:'numeric',month:'long',day:'numeric'});
+
+  renderPills(totalPeople);
+
+  let html=`
+  <div class="card">
+    <label class="section">INVESTMENT BREAKDOWN</label>
+    ${lr.map(l=>`<div class="line-item"><div><div class="name">${l.q.n}</div><div class="sub">${l.count} staff × ${fmt(l.unit)} per person</div></div><div class="val">${fmt(l.total)}</div></div>`).join('')}
+    <div class="line-item"><div style="color:var(--muted)">Subtotal (${totalPeople} staff)</div><div style="color:var(--muted)">${fmt(totalCost)}</div></div>
+    ${volDisc>0?`<div class="line-item discount-line"><div class="name">Volume discount — ${Math.round(tier.d*100)}% off (${tier.l})</div><div class="val">−${fmt(volDisc)}</div></div>`:''}
+    <div class="total-line"><div style="font-weight:700">Total investment</div><div class="val">${fmt(final)}</div></div>
+    <div style="font-size:12px;color:var(--light);margin-top:4px">${fmt(avg)} average per person — approximately 3 weeks to completion</div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="label">ANNUAL SALARY UPLIFT</div><div class="value" style="color:var(--gl)">${fmt(totalSalary)}</div><div class="sub">Estimated across team</div></div>
+    <div class="metric"><div class="label">RETENTION SAVINGS</div><div class="value" style="color:var(--blue)">${fmt(retention)}</div><div class="sub">12% turnover reduction</div></div>
+    <div class="metric"><div class="label">COMPLIANCE VALUE</div><div class="value" style="color:var(--purple)">${fmt(compliance)}</div><div class="sub">Audit readiness and risk reduction</div></div>
+  </div>
+
+  <div class="roi-box">
+    <div class="tag">PROJECTED ANNUAL RETURN</div>
+    <div class="big">${fmt(roi)}</div>
+    <div class="roi-stats">
+      <div class="roi-stat"><div class="num" style="color:#FFF">${mult.toFixed(1)}×</div><div class="lbl">ROI MULTIPLE</div></div>
+      <div class="roi-stat"><div class="num" style="color:#A8E6CF">${payback} mo</div><div class="lbl">PAYBACK PERIOD</div></div>
+      <div class="roi-stat"><div class="num" style="color:#C8F0DC">~3 wks</div><div class="lbl">COMPLETION TIME</div></div>
+    </div>
+  </div>
+
+  <button class="proposal-btn" onclick="document.getElementById('proposalBox').classList.toggle('hidden')">Generate Board-Ready Proposal</button>
+  <a href="https://www.3cir.com/public/" target="_blank" class="cta-btn">Start Your Free Bulk RPL Assessment →</a>
+
+  <div id="proposalBox" class="hidden proposal">
+    <div class="head">
+      <div style="font-size:11px;letter-spacing:3px;color:var(--g);font-weight:700">3CIR — RECOGNITION OF PRIOR LEARNING</div>
+      <h2 style="font-size:24px;font-weight:800;margin:8px 0 4px">${org} — Workforce Qualification Proposal</h2>
+      <div style="font-size:14px;color:var(--muted)">Prepared: ${today}</div>
+    </div>
+    <h3 style="font-size:14px;letter-spacing:2px;color:var(--g);font-weight:700;margin-bottom:12px">INVESTMENT SUMMARY</h3>
+    <table>
+      <thead><tr><th>Qualification</th><th style="text-align:center">Staff</th><th style="text-align:right">Per Person</th><th style="text-align:right">Subtotal</th></tr></thead>
+      <tbody>
+        ${lr.map(l=>`<tr><td>${l.q.n}<br><span class="code">${l.q.c}</span></td><td style="text-align:center">${l.count}</td><td style="text-align:right">${fmt(l.unit)}</td><td style="text-align:right;font-weight:600">${fmt(l.total)}</td></tr>`).join('')}
+        ${volDisc>0?`<tr><td colspan="3" style="color:var(--g);font-weight:600">Volume discount (${Math.round(tier.d*100)}% — ${totalPeople} staff)</td><td style="text-align:right;color:var(--g);font-weight:700">−${fmt(volDisc)}</td></tr>`:''}
+        <tr class="total-row"><td colspan="3">Total Investment</td><td style="text-align:right;color:var(--gd)">${fmt(final)}</td></tr>
+      </tbody>
+    </table>
+    <h3 style="font-size:14px;letter-spacing:2px;color:var(--g);font-weight:700;margin-bottom:12px">PROJECTED ANNUAL RETURNS</h3>
+    <div class="prop-metrics">
+      <div class="prop-metric"><div style="font-size:20px;font-weight:800;color:var(--gl)">${fmt(totalSalary)}</div><div style="font-size:11px;color:var(--light);margin-top:4px">Salary Uplift</div></div>
+      <div class="prop-metric"><div style="font-size:20px;font-weight:800;color:var(--blue)">${fmt(retention)}</div><div style="font-size:11px;color:var(--light);margin-top:4px">Retention Savings</div></div>
+      <div class="prop-metric"><div style="font-size:20px;font-weight:800;color:var(--purple)">${fmt(compliance)}</div><div style="font-size:11px;color:var(--light);margin-top:4px">Compliance Value</div></div>
+    </div>
+    <div class="prop-roi">
+      <div style="font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.7)">TOTAL ANNUAL RETURN</div>
+      <div style="font-size:32px;font-weight:900;color:#FFF;margin:8px 0">${fmt(roi)}</div>
+      <div style="font-size:14px;color:rgba(255,255,255,0.7)">${mult.toFixed(1)}× return on investment — ${payback}-month payback period</div>
+    </div>
+    <div class="footer-note">
+      <p>RPL completion: approximately 3 weeks per employee, subject to evidence availability.</p>
+      <p>Salary uplift projections based on industry averages from SEEK and Jobs and Skills Australia data.</p>
+      <p>Volume discounts applied automatically based on total staff numbers across all qualifications.</p>
+      <p>Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).</p>
+      <p>For a detailed proposal or to discuss pricing, contact us at hello@3cir.com or call 1300 517 039.</p>
+      <p style="font-weight:600;color:var(--g);margin:0">3CIR Pty Ltd — Australia's veteran-owned RPL provider — 225+ five-star reviews</p>
+    </div>
+  </div>
+
+  <div class="rto">Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).</div>`;
+
+  const section=document.getElementById('resultsSection');
+  section.innerHTML=html;
+  section.classList.remove('hidden');
+  section.scrollIntoView({behavior:'smooth'});
+}
+
+// Init
+renderLines();
+renderPills(0);
+</script>
+</body>
+</html>
