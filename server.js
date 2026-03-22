@@ -375,14 +375,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.1',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.2',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.1', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.2', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -461,7 +461,11 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   }
   const fullSystemPrompt = buildSystemPrompt(s.audience, pageUrl || '', seekData, absData) + fileContext;
 
-  // === EVIDENCE SCANNER: Auto-trigger scan when user requests it and conditions are met ===
+  // === EVIDENCE SCANNER: Auto-trigger scan when conditions are met ===
+  // Three trigger paths:
+  //   1. User says "scan my resume" AND file already uploaded → immediate
+  //   2. User said "scan" earlier (scanRequested=true), then uploaded → triggers on next message
+  //   3. File just uploaded (fileJustUploaded=true) + contact + quals → auto-trigger, no keyword needed
   let scanResults = '';
   const scanPatterns = /\b(scan|evidence check|check my (resume|cv|document|file|record)|analyse my|analyze my|run.*(check|scan|analysis))\b/i;
   const hasFile = s.uploadedFileBuffer && s.uploadedFiles && s.uploadedFiles.length > 0;
@@ -469,10 +473,21 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   const hasQuals = (s.qualsDiscussed || []).length > 0;
   const scanMatch = scanPatterns.test(clean);
 
-  // === EVIDENCE SCANNER DEBUG: Log every condition on every message ===
-  console.log(`[Evidence Debug] Message: "${clean.substring(0, 60)}" | scanMatch: ${scanMatch} | hasFile: ${hasFile} | hasContact: ${hasContact} | hasQuals: ${hasQuals} | alreadyScanned: ${!!s.evidenceScanned} | contactId: ${s.contactId || 'NONE'} | qualsCount: ${(s.qualsDiscussed || []).length} | uploadedFiles: ${(s.uploadedFiles || []).length} | bufferSize: ${s.uploadedFileBuffer ? s.uploadedFileBuffer.length : 0}`);
+  // If user asks for scan but no file yet, remember the request
+  if (scanMatch && !hasFile) {
+    s.scanRequested = true;
+    sessions.set(s.id, s);
+    console.log(`[Evidence Scan] Scan requested but no file yet — flagged for auto-trigger after upload`);
+  }
 
-  if (scanMatch && hasFile && hasContact && hasQuals && !s.evidenceScanned) {
+  // Trigger scan if: (keyword match OR previously requested OR file just uploaded) AND all conditions met
+  const shouldScan = (scanMatch || s.scanRequested || s.fileJustUploaded) && hasFile && hasContact && hasQuals && !s.evidenceScanned;
+  console.log(`[Evidence Scan] Check: shouldScan=${shouldScan} | scanMatch=${scanMatch} | scanRequested=${!!s.scanRequested} | fileJustUploaded=${!!s.fileJustUploaded} | hasFile=${hasFile} | hasContact=${hasContact} | hasQuals=${hasQuals} | scanned=${!!s.evidenceScanned}`);
+
+  // Clear the fileJustUploaded flag regardless
+  if (s.fileJustUploaded) { s.fileJustUploaded = false; sessions.set(s.id, s); }
+
+  if (shouldScan) {
     try {
       const { analyseEvidence, extractWordText } = require('./services/evidence-scanner');
       const lastQual = s.qualsDiscussed[s.qualsDiscussed.length - 1];
@@ -526,15 +541,9 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
       console.error('[Evidence Scan] Auto-trigger error:', scanErr.message, scanErr.stack);
       // Non-blocking — chat continues normally without scan results
     }
-  } else if (scanMatch) {
-    // === EVIDENCE SCANNER DEBUG: Log WHY the scan was NOT triggered ===
-    const reasons = [];
-    if (!hasFile) reasons.push('NO FILE BUFFER (upload a file first)');
-    if (!hasContact) reasons.push('NO CONTACT ID (provide email/phone first)');
-    if (!hasQuals) reasons.push('NO QUALS DISCUSSED (discuss a qualification first)');
-    if (s.evidenceScanned) reasons.push('ALREADY SCANNED');
-    console.log(`[Evidence Debug] Scan keyword detected but NOT triggered. Missing: ${reasons.join(' | ')}`);
   }
+  // Clear scanRequested flag after successful scan
+  if (shouldScan) { s.scanRequested = false; sessions.set(s.id, s); }
   const chatSystemPrompt = fullSystemPrompt + scanResults;
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -686,11 +695,11 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       s.uploadedFileBuffer = file.buffer;
       s.uploadedFileMime = file.mimetype;
       s.uploadedFileName = file.originalname;
+      s.fileJustUploaded = true; // Flag for auto-trigger on next /api/chat call
 
       sessions.set(sessionId, s);
 
-      // === EVIDENCE SCANNER DEBUG: Confirm buffer was stored ===
-      console.log(`[Evidence Debug] File buffer stored in session ${sessionId}. Buffer size: ${file.buffer.length} bytes, MIME: ${file.mimetype}, Name: ${file.originalname}`);
+      console.log(`[Evidence Scan] File stored: ${file.originalname} (${file.buffer.length} bytes). fileJustUploaded=true, scanRequested=${!!s.scanRequested}, contactId=${s.contactId || 'NONE'}, quals=${(s.qualsDiscussed||[]).length}`);
 
       // Add GHL note if contact exists
       if (s.contactId) {
@@ -1201,7 +1210,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.1');
+  console.log('  3CIR AI ASSISTANT v2.0.2');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
@@ -1218,7 +1227,7 @@ app.listen(PORT, async () => {
   console.log(`  WhatsApp: ${process.env.TWILIO_WHATSAPP_FROM ? 'ON' : 'OFF'}`);
   console.log(`  SEEK:     ${seek.getCacheSize()} qualifications cached`);
   console.log(`  ABS:      ${process.env.ABS_API_KEY ? 'Live API' : 'Baseline data'}`);
-  console.log(`  Evidence: ON (debug logging enabled)`);
+  console.log(`  Evidence: ON (auto-trigger on upload)`);
   console.log('============================================================');
 
   // Initial SEEK refresh (runs in background, doesn't block startup)
