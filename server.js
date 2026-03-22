@@ -460,6 +460,68 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   }
   const fullSystemPrompt = buildSystemPrompt(s.audience, pageUrl || '', seekData, absData) + fileContext;
 
+  // === EVIDENCE SCANNER: Auto-trigger scan when user requests it and conditions are met ===
+  let scanResults = '';
+  const scanPatterns = /\b(scan|evidence check|check my (resume|cv|document|file|record)|analyse my|analyze my|run.*(check|scan|analysis))\b/i;
+  const hasFile = s.uploadedFileBuffer && s.uploadedFiles && s.uploadedFiles.length > 0;
+  const hasContact = !!(s.contactId);
+  const hasQuals = (s.qualsDiscussed || []).length > 0;
+
+  if (scanPatterns.test(clean) && hasFile && hasContact && hasQuals && !s.evidenceScanned) {
+    try {
+      const { analyseEvidence, extractWordText } = require('./services/evidence-scanner');
+      const lastQual = s.qualsDiscussed[s.qualsDiscussed.length - 1];
+      console.log(`[Evidence Scan] Auto-triggered for ${lastQual.code} ${lastQual.name}`);
+
+      // Extract text from Word docs if needed
+      let scanBuffer = s.uploadedFileBuffer;
+      let scanMime = s.uploadedFileMime;
+      if (scanMime === 'application/msword' || scanMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const extracted = await extractWordText(scanBuffer);
+        scanBuffer = Buffer.from(extracted, 'utf-8');
+        scanMime = 'text/plain';
+      }
+
+      const result = await analyseEvidence(scanBuffer, scanMime, s.uploadedFileName, lastQual.code, s.audience);
+
+      if (result.success) {
+        const scan = result.prospectSummary;
+        scanResults = '\n\nEVIDENCE SCAN RESULTS (just completed — present these to the visitor naturally):\n' +
+          'Qualification: ' + scan.qualCode + ' ' + scan.qualName + '\n' +
+          'Match Score: ' + scan.score + '%\n' +
+          'Assessment: ' + scan.confidenceText + '\n' +
+          'Strengths: ' + scan.strengths.join(', ') + '\n' +
+          'Gaps: ' + scan.gaps.join(', ') + '\n' +
+          'IMPORTANT: Present these results conversationally. Lead with the score, mention strengths, gently note gaps, and end with the CTA to submit the free RPL assessment form. Do NOT use markdown formatting. Do NOT mention unit codes or competency standards.';
+
+        // Send full analysis to GHL
+        if (s.contactId && global._3cir_ghl) {
+          await global._3cir_ghl.addNote(s.contactId, result.ghlNote).catch(e => console.error('[Evidence Scan] GHL note failed:', e.message));
+          await global._3cir_ghl.upsertContact({ email: s.email || '', phone: s.phone || '', tags: ['evidence-pre-scanned'] }).catch(() => {});
+        }
+
+        // Clear buffer and mark as scanned
+        s.uploadedFileBuffer = null;
+        s.evidenceScanned = true;
+        s.evidenceScanScore = scan.score;
+        s.evidenceScanQual = lastQual.code;
+        sessions.set(s.id, s);
+
+        // Log to analytics
+        const analyticsUrl = process.env.ANALYTICS_WEBHOOK_URL;
+        if (analyticsUrl) {
+          axios.post(analyticsUrl, { sessionId: s.id, audience: s.audience, eventType: 'evidence_scan', qualCode: lastQual.code, score: scan.score, contactId: s.contactId, timestamp: new Date().toISOString() }, { timeout: 10000 }).catch(() => {});
+        }
+
+        console.log(`[Evidence Scan] Complete: ${scan.score}% match for ${lastQual.code}`);
+      }
+    } catch (scanErr) {
+      console.error('[Evidence Scan] Auto-trigger error:', scanErr.message);
+      // Non-blocking — chat continues normally without scan results
+    }
+  }
+  const chatSystemPrompt = fullSystemPrompt + scanResults;
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -479,7 +541,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
         stream = await anthropic.messages.stream({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 2048,
-          system: fullSystemPrompt,
+          system: chatSystemPrompt,
           messages: msgs,
         });
         break;
