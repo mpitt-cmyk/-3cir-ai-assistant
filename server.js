@@ -378,14 +378,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.3',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.4',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.3', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.4', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -640,12 +640,54 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
 });
 
 app.post('/api/lead', async (req, res) => {
-  const { sessionId, name, email, phone, qualInterest, audience, notes, source } = req.body;
+  // === VAPI FORMAT DETECTION ===
+  // Vapi sends function calls wrapped in message.functionCall.parameters
+  // Detect and extract the flat fields from Vapi's nested format
+  let leadData = {};
+  const vapiMsg = req.body?.message;
+  if (vapiMsg && vapiMsg.type === 'function-call' && vapiMsg.functionCall) {
+    const params = vapiMsg.functionCall.parameters || {};
+    const staticParams = {};
+    // Vapi also sends static parameters from tool config
+    if (req.body?.message?.call) {
+      console.log(`[Lead] Vapi function call detected: ${vapiMsg.functionCall.name}`);
+    }
+    leadData = {
+      name: params.name || '',
+      email: params.email || '',
+      phone: params.phone || '',
+      source: 'AI Voice Call',
+      qualInterest: params.qualInterest || '',
+      notes: params.notes || '',
+      audience: params.audience || 'services',
+      sessionId: null,
+    };
+    console.log(`[Lead] Vapi payload extracted: name=${leadData.name}, email=${leadData.email}, phone=${leadData.phone}`);
+  } else {
+    // Standard format from chatbot widget or direct API call
+    leadData = {
+      name: req.body.name || '',
+      email: req.body.email || '',
+      phone: req.body.phone || '',
+      source: req.body.source || '',
+      qualInterest: req.body.qualInterest || '',
+      notes: req.body.notes || '',
+      audience: req.body.audience || '',
+      sessionId: req.body.sessionId || null,
+    };
+  }
+
+  const { sessionId, name, email, phone, qualInterest, audience, notes, source } = leadData;
   const s = sessionId ? sessions.get(sessionId) : null;
 
   // Voice calls won't have a session — that's OK
   if (sessionId && !s) return res.status(404).json({ error: 'Session not found' });
-  if (!email && !phone) return res.status(400).json({ error: 'Email or phone required' });
+  if (!email && !phone) {
+    console.log(`[Lead] Rejected: no email or phone. Body keys: ${Object.keys(req.body).join(',')}`);
+    // For Vapi: return a result so the bot can continue talking
+    if (vapiMsg) return res.json({ results: [{ toolCallId: vapiMsg.functionCall?.id || '', result: 'Details incomplete — ask for phone or email' }] });
+    return res.status(400).json({ error: 'Email or phone required' });
+  }
 
   const aud = s?.audience || audience || 'services';
   const isVoice = !sessionId || source === 'AI Voice Call';
@@ -671,7 +713,22 @@ app.post('/api/lead', async (req, res) => {
       await ghl.addNote(r.contactId, noteText).catch(() => {});
     }
 
+    // Trigger callback webhook if this is from a voice call requesting callback
+    if (isVoice && process.env.CALLBACK_WEBHOOK_URL) {
+      axios.post(process.env.CALLBACK_WEBHOOK_URL, {
+        contactId: r.contactId, firstName: p[0] || '', phone: phone || '', email: email || '',
+        preferredTime: 'Voice call — ASAP', audience: aud,
+        qualsDiscussed: qualInterest || 'Not specified', source: 'AI Voice Call'
+      }, { timeout: 10000 }).catch(e => console.error(`[Callback] Voice lead webhook: ${e.message}`));
+    }
+
     if (s) await triggerSmsWebhook(s).catch(() => {});
+    console.log(`[Lead] ${name} ${email || phone} → ${r.contactId} (${isVoice ? 'Voice' : 'Chat'})`);
+  }
+
+  // Vapi expects a specific response format
+  if (vapiMsg) {
+    return res.json({ results: [{ toolCallId: vapiMsg.functionCall?.id || '', result: `Lead saved successfully. Contact ID: ${r.contactId || 'unknown'}` }] });
   }
   res.json({ ok: r.ok, contactId: r.contactId });
 });
@@ -1213,7 +1270,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.3');
+  console.log('  3CIR AI ASSISTANT v2.0.4');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
