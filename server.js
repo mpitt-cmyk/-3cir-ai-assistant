@@ -378,14 +378,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.4',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.5',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.4', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.5', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -1109,79 +1109,163 @@ app.post('/api/whatsapp', async (req, res) => {
 });
 
 // ============================================================
-// POST /api/voice-callback — Vapi post-call webhook
-// Receives call transcript and summary after every voice call
+// POST /api/voice-callback — Vapi Server URL event handler
+// Handles ALL Vapi event types: function-call, end-of-call-report, status-update, etc.
+// CRITICAL: Must return proper responses for each event type or calls will break
 // ============================================================
 app.post('/api/voice-callback', async (req, res) => {
-  res.status(200).json({ ok: true });
-
   try {
     const msg = req.body?.message || req.body;
-    const call = msg?.call || msg;
     const type = msg?.type || '';
 
-    // Only process end-of-call reports
-    if (type && type !== 'end-of-call-report') return;
+    console.log(`[Vapi Event] Type: ${type || 'unknown'}`);
 
-    const phone = call?.customer?.number || '';
-    const transcript = call?.transcript || '';
-    const summary = call?.summary || '';
-    const duration = call?.endedAt && call?.startedAt
-      ? Math.round((new Date(call.endedAt) - new Date(call.startedAt)) / 1000)
-      : 0;
+    // === FUNCTION CALL: capture_lead tool ===
+    if (type === 'function-call' && msg.functionCall) {
+      const fnName = msg.functionCall.name;
+      const params = msg.functionCall.parameters || {};
+      console.log(`[Vapi Tool] ${fnName} called with: ${JSON.stringify(params)}`);
 
-    console.log(`[Voice Callback] Call ended | Phone: ${phone} | Duration: ${duration}s | Transcript: ${transcript.length} chars`);
+      if (fnName === 'capture_lead') {
+        const name = params.name || '';
+        const email = params.email || '';
+        const phone = params.phone || msg.call?.customer?.number || '';
 
-    if (!phone) return;
+        if (name && (email || phone)) {
+          const p = name.split(/\s+/);
+          const r = await ghl.upsertContact({
+            firstName: p[0] || '', lastName: p.slice(1).join(' ') || '',
+            email: email, phone: phone,
+            source: 'AI Voice Call',
+            tags: ['src:AI Voice — Services', 'voice-lead'],
+          });
+          if (r.ok) {
+            await ghl.createOpportunity(r.contactId, {
+              title: `AI Voice — ${p[0] || phone || email}`,
+              stageId: process.env.GHL_STAGE_NEW_ENQUIRIES,
+              source: 'AI Voice Call',
+            }).catch(() => {});
+            console.log(`[Vapi Tool] Lead captured: ${name} ${email || phone} → ${r.contactId}`);
 
-    // Upsert contact by phone — this searches first, creates if not found
-    const r = await ghl.upsertContact({
-      firstName: 'Voice Caller',
-      lastName: '',
-      email: '',
-      phone: phone,
-      source: 'AI Voice Call',
-      tags: ['src:AI Voice — Services', 'voice-lead'],
-    }).catch(() => ({ ok: false }));
+            // Trigger callback email for voice leads
+            if (process.env.CALLBACK_WEBHOOK_URL) {
+              axios.post(process.env.CALLBACK_WEBHOOK_URL, {
+                contactId: r.contactId, firstName: p[0] || '', phone: phone, email: email,
+                preferredTime: 'Voice call — follow up', audience: 'services',
+                qualsDiscussed: 'See GHL notes', source: 'AI Voice Call'
+              }, { timeout: 10000 }).catch(() => {});
+            }
+          }
+          return res.json({ results: [{ toolCallId: msg.functionCall.id || '', result: 'Lead saved successfully' }] });
+        } else {
+          return res.json({ results: [{ toolCallId: msg.functionCall.id || '', result: 'Need name and phone or email to save lead' }] });
+        }
+      }
 
-    if (r.ok && r.contactId) {
-      // Add transcript as a contact note
-      const noteText = [
-        `AI Voice Call — ${duration}s`,
-        summary ? `\nSummary: ${summary}` : '',
-        transcript ? `\nFull Transcript:\n${transcript}` : '',
-      ].join('');
-      await ghl.addNote(r.contactId, noteText).catch(e => {
-        console.error(`[Voice Callback] Failed to add note: ${e.message}`);
-      });
-
-      // Create opportunity if this is a new contact (capture_lead may have already created one)
-      await ghl.createOpportunity(r.contactId, {
-        title: `AI Voice — ${phone}`,
-        stageId: process.env.GHL_STAGE_NEW_ENQUIRIES,
-        source: 'AI Voice Call',
-      }).catch(() => {}); // Silently fail if opp already exists
-
-      console.log(`[Voice Callback] Contact ${r.contactId} updated with transcript`);
+      // Unknown function — return empty result
+      return res.json({ results: [{ toolCallId: msg.functionCall.id || '', result: 'OK' }] });
     }
 
-    // Log to analytics if configured
-    const analyticsUrl = process.env.ANALYTICS_WEBHOOK_URL;
-    if (analyticsUrl) {
-      await axios.post(analyticsUrl, {
-        sessionId: `voice_${phone}_${Date.now()}`,
-        platform: 'voice',
-        audience: 'services',
-        messageCount: 0,
-        qualsDiscussed: [],
-        duration: duration,
-        summary: summary || 'Voice call — see transcript in GHL',
-        leadCaptured: true,
+    // === END OF CALL REPORT: Extract data from transcript ===
+    if (type === 'end-of-call-report') {
+      res.status(200).json({ ok: true });
+
+      const call = msg.call || {};
+      const phone = call.customer?.number || '';
+      const transcript = msg.transcript || call.transcript || '';
+      const summary = msg.summary || call.summary || '';
+      const duration = msg.endedReason ? 0 :
+        (call.endedAt && call.startedAt ? Math.round((new Date(call.endedAt) - new Date(call.startedAt)) / 1000) : 0);
+      const recordingUrl = msg.recordingUrl || '';
+
+      console.log(`[Voice End] Phone: ${phone} | Duration: ${duration}s | Transcript: ${transcript.length} chars`);
+
+      if (!phone && !transcript) return;
+
+      // Extract name and email from transcript using Claude
+      let extractedName = '';
+      let extractedEmail = '';
+      let extractedQual = '';
+      if (transcript && transcript.length > 50) {
+        try {
+          const extraction = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 200,
+            system: 'Extract the callers name, email address, and qualification interest from this call transcript. Return ONLY a JSON object: {"name":"","email":"","qual":""}. If any field is not found, use empty string. No markdown, no explanation.',
+            messages: [{ role: 'user', content: transcript.substring(0, 3000) }],
+          });
+          const raw = (extraction.content[0]?.text || '').replace(/```json|```/g, '').trim();
+          const parsed = JSON.parse(raw);
+          extractedName = parsed.name || '';
+          extractedEmail = parsed.email || '';
+          extractedQual = parsed.qual || '';
+          console.log(`[Voice End] Extracted: name=${extractedName}, email=${extractedEmail}, qual=${extractedQual}`);
+        } catch (e) {
+          console.error(`[Voice End] Extraction failed: ${e.message}`);
+        }
+      }
+
+      // Create/update GHL contact
+      const contactName = extractedName || 'Voice Caller';
+      const p = contactName.split(/\s+/);
+      const r = await ghl.upsertContact({
+        firstName: p[0] || 'Voice', lastName: p.slice(1).join(' ') || 'Caller',
+        email: extractedEmail || '', phone: phone || '',
         source: 'AI Voice Call',
-      }, { timeout: 10000 }).catch(() => {});
+        tags: ['src:AI Voice — Services', 'voice-lead'],
+      }).catch(() => ({ ok: false }));
+
+      if (r.ok && r.contactId) {
+        // Add transcript as note
+        const noteText = [
+          `AI Voice Call — ${duration}s`,
+          extractedQual ? `\nQualification Interest: ${extractedQual}` : '',
+          summary ? `\nSummary: ${summary}` : '',
+          recordingUrl ? `\nRecording: ${recordingUrl}` : '',
+          transcript ? `\nTranscript:\n${transcript.substring(0, 5000)}` : '',
+        ].join('');
+        await ghl.addNote(r.contactId, noteText).catch(() => {});
+
+        // Create opportunity
+        await ghl.createOpportunity(r.contactId, {
+          title: `AI Voice — ${extractedName || phone}`,
+          stageId: process.env.GHL_STAGE_NEW_ENQUIRIES,
+          source: 'AI Voice Call',
+        }).catch(() => {});
+
+        // Trigger callback email
+        if (process.env.CALLBACK_WEBHOOK_URL) {
+          axios.post(process.env.CALLBACK_WEBHOOK_URL, {
+            contactId: r.contactId, firstName: p[0] || '', phone: phone || '',
+            email: extractedEmail || '', preferredTime: 'Voice call ended — follow up',
+            audience: 'services', qualsDiscussed: extractedQual || 'See transcript',
+            source: 'AI Voice Call — Post-Call'
+          }, { timeout: 10000 }).catch(() => {});
+        }
+
+        console.log(`[Voice End] Contact ${r.contactId} created/updated with transcript`);
+      }
+
+      // Log analytics
+      const analyticsUrl = process.env.ANALYTICS_WEBHOOK_URL;
+      if (analyticsUrl) {
+        axios.post(analyticsUrl, {
+          sessionId: `voice_${phone}_${Date.now()}`, platform: 'voice', audience: 'services',
+          messageCount: 0, qualsDiscussed: extractedQual ? [extractedQual] : [],
+          duration, summary: summary || '', leadCaptured: r?.ok || false,
+          source: 'AI Voice Call',
+        }, { timeout: 10000 }).catch(() => {});
+      }
+      return;
     }
+
+    // === ALL OTHER EVENTS: Acknowledge with 200 ===
+    // status-update, speech-update, transcript, hang, etc.
+    return res.status(200).json({ ok: true });
+
   } catch (err) {
-    console.error(`[Voice Callback] Error: ${err.message}`);
+    console.error(`[Vapi Event] Error: ${err.message}`);
+    return res.status(200).json({ ok: true }); // Always return 200 to Vapi
   }
 });
 
@@ -1270,7 +1354,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.4');
+  console.log('  3CIR AI ASSISTANT v2.0.5');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
