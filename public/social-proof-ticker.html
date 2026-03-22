@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3CIR — Live Activity</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--g:#1b8466;--gl:#24a882;--gd:#14614c;--gf:rgba(27,132,102,0.1);--gold:#F5A800;--text:#1A2E26;--muted:#4A6B5C;--light:#8AA69A;--bg:#F8FBF9;--card:#FFF;--border:#DCE8E3}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:transparent}
+
+/* Ticker Toast — Bottom-left popup */
+.ticker-toast{position:fixed;bottom:20px;left:20px;z-index:9998;max-width:380px;width:calc(100vw - 40px);pointer-events:none}
+.toast-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;box-shadow:0 8px 30px rgba(0,0,0,0.12);display:flex;align-items:flex-start;gap:12px;animation:toastIn 0.5s ease forwards;opacity:0;transform:translateY(20px);pointer-events:auto}
+.toast-item.hiding{animation:toastOut 0.4s ease forwards}
+@keyframes toastIn{to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateY(20px)}}
+.toast-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.toast-icon.new{background:var(--gf);color:var(--g)}
+.toast-icon.progress{background:#E3F2FD;color:#1565C0}
+.toast-icon.won{background:#FFF8E1;color:var(--gold)}
+.toast-text{flex:1;min-width:0}
+.toast-message{font-size:13px;color:var(--text);line-height:1.4}
+.toast-message strong{font-weight:700;color:var(--gd)}
+.toast-time{font-size:11px;color:var(--light);margin-top:3px}
+.toast-close{background:none;border:none;color:var(--light);cursor:pointer;font-size:14px;padding:0 0 0 8px;line-height:1;flex-shrink:0}
+.toast-close:hover{color:var(--text)}
+
+/* Full ticker strip — for embedding on a page */
+.ticker-strip{background:var(--gd);color:#FFF;padding:10px 0;overflow:hidden;position:relative}
+.ticker-strip::before,.ticker-strip::after{content:'';position:absolute;top:0;bottom:0;width:60px;z-index:2}
+.ticker-strip::before{left:0;background:linear-gradient(to right,var(--gd),transparent)}
+.ticker-strip::after{right:0;background:linear-gradient(to left,var(--gd),transparent)}
+.ticker-track{display:flex;animation:scroll 60s linear infinite;white-space:nowrap}
+.ticker-track:hover{animation-play-state:paused}
+.ticker-entry{display:inline-flex;align-items:center;gap:8px;padding:0 40px;font-size:13px;color:rgba(255,255,255,0.9)}
+.ticker-entry .dot{width:6px;height:6px;border-radius:50%;background:var(--gl);flex-shrink:0}
+.ticker-entry .dot.won{background:var(--gold)}
+.ticker-entry strong{color:#FFF;font-weight:700}
+.ticker-entry .time{color:rgba(255,255,255,0.5);margin-left:6px;font-size:11px}
+@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* Loading */
+.loading{text-align:center;padding:20px;color:var(--light);font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- Toast popup container -->
+<div class="ticker-toast" id="toastContainer"></div>
+
+<!-- Scrolling strip (hidden by default — embed this on a page) -->
+<div class="ticker-strip" id="tickerStrip" style="display:none">
+  <div class="ticker-track" id="tickerTrack">
+    <div class="loading">Loading live activity...</div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION
+// Replace WEBAPP_URL with your deployed Apps Script web app URL
+// ============================================================
+const WEBAPP_URL = 'https://script.google.com/a/macros/3cir.com/s/AKfycbxGIx6v-y6GGmwnFHnaMsc-HI05rCLrtDmILMLu7V2QyJPf5FG90afOqzch7ziu2A0-9Q/exec';
+
+// Display modes: 'toast' (popup), 'strip' (scrolling bar), 'both'
+const DISPLAY_MODE = 'toast';
+
+// Toast settings
+const TOAST_INTERVAL = 8000;    // Show new toast every 8 seconds
+const TOAST_DURATION = 6000;    // Each toast visible for 6 seconds
+const TOAST_DELAY_START = 3000; // Wait 3 seconds before first toast
+
+// ============================================================
+// ICONS
+// ============================================================
+const ICONS = { new: '🔔', progress: '📋', won: '🎓' };
+
+// ============================================================
+// FETCH DATA
+// ============================================================
+let tickerItems = [];
+let currentIndex = 0;
+
+async function fetchSocialProof() {
+  try {
+    const res = await fetch(WEBAPP_URL);
+    const data = await res.json();
+    if (data.items && data.items.length > 0) {
+      tickerItems = data.items;
+      startDisplay();
+    }
+  } catch (e) {
+    // Fallback — show sample data so widget isn't empty
+    tickerItems = generateFallbackData();
+    startDisplay();
+  }
+}
+
+function generateFallbackData() {
+  const samples = [
+    { background: 'Army veteran', city: 'Brisbane', action: 'started their RPL assessment for', qual: 'Diploma of Leadership and Management', timeAgo: '2 hours ago', type: 'new' },
+    { background: 'Police officer', city: 'Sydney', action: 'enquired about', qual: 'Certificate IV in Government Investigations', timeAgo: '3 hours ago', type: 'new' },
+    { background: 'Paramedic', city: 'Melbourne', action: 'submitted evidence for', qual: 'Diploma of Work Health and Safety', timeAgo: '5 hours ago', type: 'progress' },
+    { background: 'Navy veteran', city: 'Perth', action: 'was awarded their', qual: 'Certificate IV in Leadership and Management', timeAgo: 'Yesterday', type: 'won' },
+    { background: 'Operations manager', city: 'Gold Coast', action: 'enquired about', qual: 'Advanced Diploma of Leadership and Management', timeAgo: '4 hours ago', type: 'new' },
+    { background: 'Firefighter', city: 'Adelaide', action: 'started their RPL assessment for', qual: 'Certificate IV in Work Health and Safety', timeAgo: '6 hours ago', type: 'new' },
+    { background: 'Project manager', city: 'Canberra', action: 'earned their', qual: 'Diploma of Project Management', timeAgo: '2 days ago', type: 'won' },
+    { background: 'Air Force veteran', city: 'Townsville', action: 'enquired about', qual: 'Certificate IV in Cyber Security', timeAgo: '1 hour ago', type: 'new' },
+    { background: 'Security professional', city: 'Darwin', action: 'submitted evidence for', qual: 'Diploma of Security Risk Management', timeAgo: 'Yesterday', type: 'progress' },
+    { background: 'HR professional', city: 'Newcastle', action: 'began their qualification journey with', qual: 'Diploma of Human Resources Management', timeAgo: '3 hours ago', type: 'new' }
+  ];
+  return samples;
+}
+
+// ============================================================
+// TOAST DISPLAY
+// ============================================================
+
+function showToast(item) {
+  const container = document.getElementById('toastContainer');
+
+  // Remove existing toast
+  const existing = container.querySelector('.toast-item');
+  if (existing) {
+    existing.classList.add('hiding');
+    setTimeout(() => existing.remove(), 400);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = 'toast-item';
+  toast.innerHTML = `
+    <div class="toast-icon ${item.type}">${ICONS[item.type] || '🔔'}</div>
+    <div class="toast-text">
+      <div class="toast-message"><strong>${item.background}</strong> from ${item.city} ${item.action} ${item.qual}</div>
+      <div class="toast-time">${item.timeAgo}</div>
+    </div>
+    <button class="toast-close" onclick="this.parentElement.classList.add('hiding');setTimeout(()=>this.parentElement.remove(),400)">✕</button>
+  `;
+
+  setTimeout(() => container.appendChild(toast), 500);
+
+  // Auto-hide
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.classList.add('hiding');
+      setTimeout(() => toast.remove(), 400);
+    }
+  }, TOAST_DURATION);
+}
+
+// ============================================================
+// STRIP DISPLAY
+// ============================================================
+
+function buildStrip() {
+  const strip = document.getElementById('tickerStrip');
+  const track = document.getElementById('tickerTrack');
+
+  if (tickerItems.length === 0) return;
+
+  strip.style.display = 'block';
+
+  // Duplicate items for seamless scroll
+  const allItems = [...tickerItems, ...tickerItems];
+  track.innerHTML = allItems.map(item => `
+    <div class="ticker-entry">
+      <span class="dot ${item.type}"></span>
+      <span><strong>${item.background}</strong> from ${item.city} ${item.action} ${item.qual}</span>
+      <span class="time">${item.timeAgo}</span>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// START
+// ============================================================
+
+function startDisplay() {
+  if (tickerItems.length === 0) return;
+
+  if (DISPLAY_MODE === 'toast' || DISPLAY_MODE === 'both') {
+    // Shuffle for variety
+    tickerItems.sort(() => Math.random() - 0.5);
+
+    setTimeout(() => {
+      showToast(tickerItems[currentIndex]);
+      currentIndex = (currentIndex + 1) % tickerItems.length;
+
+      setInterval(() => {
+        showToast(tickerItems[currentIndex]);
+        currentIndex = (currentIndex + 1) % tickerItems.length;
+      }, TOAST_INTERVAL);
+    }, TOAST_DELAY_START);
+  }
+
+  if (DISPLAY_MODE === 'strip' || DISPLAY_MODE === 'both') {
+    buildStrip();
+  }
+}
+
+// Init
+if (WEBAPP_URL && WEBAPP_URL !== 'https://script.google.com/a/macros/3cir.com/s/AKfycbxGIx6v-y6GGmwnFHnaMsc-HI05rCLrtDmILMLu7V2QyJPf5FG90afOqzch7ziu2A0-9Q/exec') {
+  fetchSocialProof();
+} else {
+  // No web app URL configured — use fallback data
+  tickerItems = generateFallbackData();
+  startDisplay();
+}
+
+// Refresh data every 5 minutes
+setInterval(() => {
+  if (WEBAPP_URL && WEBAPP_URL !== 'https://script.google.com/a/macros/3cir.com/s/AKfycbxGIx6v-y6GGmwnFHnaMsc-HI05rCLrtDmILMLu7V2QyJPf5FG90afOqzch7ziu2A0-9Q/exec') {
+    fetchSocialProof();
+  }
+}, 300000);
+</script>
+</body>
+</html>
