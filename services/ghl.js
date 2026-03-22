@@ -103,13 +103,20 @@ class GHLClient {
     }
   }
 
-  // GHL v1 requires title, status, pipelineStageId — omitting any causes 422
+  // FIX: GHL v1 requires pipeline ID in URL path, not just in body
+  // Correct endpoint: POST /pipelines/{pipelineId}/opportunities
   async createOpportunity(contactId, { title, stageId, monetaryValue, source }) {
     try {
-      const r = await this._request('POST', '/pipelines/opportunities', {
+      const pipelineId = process.env.GHL_PIPELINE_ID;
+      if (!pipelineId) {
+        console.error('[GHL] GHL_PIPELINE_ID not set — cannot create opportunity');
+        return { ok: false, error: 'Pipeline ID not configured' };
+      }
+
+      const r = await this._request('POST', `/pipelines/${pipelineId}/opportunities`, {
         title: title || 'AI Chatbot Lead',
         status: 'open',
-        pipelineId: process.env.GHL_PIPELINE_ID,
+        pipelineId: pipelineId,
         pipelineStageId: stageId || process.env.GHL_STAGE_NEW_ENQUIRIES,
         locationId: process.env.GHL_LOCATION_ID,
         contactId,
@@ -117,6 +124,7 @@ class GHLClient {
         source: source || 'AI Chatbot',
       });
       if (r.ok) console.log(`[GHL] Created opportunity for ${contactId}`);
+      else console.error(`[GHL] Opportunity creation failed for ${contactId}: ${r.error}`);
       return r;
     } catch (err) {
       console.error(`[GHL] createOpportunity error: ${err.message}`);
