@@ -56,6 +56,7 @@ global._3cir_ghl = ghl;
 // EXPRESS
 // ============================================================
 const app = express();
+app.set('trust proxy', 1); // Render runs behind a proxy — required for express-rate-limit
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
