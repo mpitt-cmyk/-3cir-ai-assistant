@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Career Simulation — 3CIR RPL</title>
+<meta name="description" content="See your career future. Enter your background and discover which qualifications you can earn through RPL, what jobs open up, and your projected salary growth.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--g:#1b8466;--gl:#24a882;--gd:#14614c;--gg:rgba(27,132,102,0.3);--gf:rgba(27,132,102,0.1);--bg:#F8FBF9;--card:#FFF;--border:#DCE8E3;--text:#1A2E26;--muted:#4A6B5C;--light:#8AA69A;--blue:#1565C0;--purple:#7B1FA2;--gold:#F5A800}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:linear-gradient(135deg,var(--gd) 0%,var(--g) 50%,var(--gl) 100%);padding:40px 24px;text-align:center;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 70%,rgba(255,255,255,0.08) 0%,transparent 60%)}
+.header *{position:relative}
+.header .tag{font-size:13px;letter-spacing:4px;color:rgba(255,255,255,0.7);font-weight:700;margin-bottom:10px}
+.header h1{font-size:clamp(24px,5vw,40px);font-weight:800;color:#FFF;line-height:1.1;margin-bottom:10px}
+.header p{font-size:15px;color:rgba(255,255,255,0.8);max-width:580px;margin:0 auto;line-height:1.6}
+.wrap{max-width:900px;margin:0 auto;padding:32px 20px}
+label.section{font-size:12px;letter-spacing:2px;color:var(--g);font-weight:700;display:block;margin-bottom:8px}
+input,select{width:100%;padding:12px 16px;background:#FFF;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;outline:none}
+input:focus,select:focus{border-color:var(--g);box-shadow:0 0 0 3px var(--gf)}
+select optgroup{color:var(--g);font-weight:700}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr}}
+.sim-btn{width:100%;padding:16px;background:linear-gradient(135deg,var(--g),var(--gl));border:none;border-radius:10px;color:#FFF;font-size:16px;font-weight:800;letter-spacing:1px;cursor:pointer;box-shadow:0 4px 20px var(--gg);transition:transform 0.1s;margin-bottom:40px}
+.sim-btn:active{transform:scale(0.98)}
+.results{animation:fadeIn 0.5s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+/* Timeline */
+.timeline{position:relative;padding:20px 0 20px 40px;margin-bottom:32px}
+.timeline::before{content:'';position:absolute;left:15px;top:0;bottom:0;width:3px;background:linear-gradient(to bottom,var(--gl),var(--g),var(--gd));border-radius:2px}
+.tl-item{position:relative;margin-bottom:28px;animation:fadeIn 0.4s ease both}
+.tl-item:nth-child(1){animation-delay:0.1s}
+.tl-item:nth-child(2){animation-delay:0.3s}
+.tl-item:nth-child(3){animation-delay:0.5s}
+.tl-item:nth-child(4){animation-delay:0.7s}
+.tl-item:nth-child(5){animation-delay:0.9s}
+.tl-dot{position:absolute;left:-33px;top:6px;width:20px;height:20px;border-radius:50%;border:3px solid var(--g);background:var(--bg)}
+.tl-dot.now{background:var(--g);border-color:var(--g)}
+.tl-dot.qual{background:var(--gl);border-color:var(--gl)}
+.tl-dot.future{background:var(--gold);border-color:var(--gold)}
+.tl-card{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:20px 24px;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
+.tl-card.highlight{border-color:var(--g);box-shadow:0 4px 20px var(--gg)}
+.tl-label{font-size:11px;letter-spacing:2px;font-weight:700;margin-bottom:6px}
+.tl-label.now-label{color:var(--muted)}
+.tl-label.qual-label{color:var(--g)}
+.tl-label.future-label{color:var(--gold)}
+.tl-title{font-size:18px;font-weight:800;color:var(--text);margin-bottom:4px}
+.tl-sub{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:8px}
+.tl-tags{display:flex;flex-wrap:wrap;gap:6px}
+.tl-tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.tag-price{background:var(--gf);color:var(--gd)}
+.tag-time{background:#E3F2FD;color:var(--blue)}
+.tag-salary{background:#FFF3E0;color:#E65100}
+.tag-demand{background:#F3E5F5;color:var(--purple)}
+
+/* Salary Chart */
+.salary-chart{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:24px;margin-bottom:24px;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
+.chart-bars{display:flex;align-items:flex-end;gap:8px;height:200px;padding-top:20px}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.chart-bar{width:100%;max-width:80px;border-radius:8px 8px 0 0;transition:height 1s ease;position:relative}
+.chart-bar .val{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:12px;font-weight:800;white-space:nowrap}
+.chart-bar-label{font-size:10px;color:var(--muted);text-align:center;margin-top:8px;line-height:1.2;max-width:90px}
+
+/* Roles Grid */
+.roles-section{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:24px;margin-bottom:24px;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
+.roles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:12px}
+.role-chip{background:#F2F8F5;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px}
+.role-chip .title{font-weight:700;color:var(--text)}
+.role-chip .sal{font-size:11px;color:var(--g);margin-top:2px}
+
+/* Summary */
+.summary-box{background:linear-gradient(135deg,var(--gd),var(--g));border-radius:12px;padding:32px;text-align:center;margin-bottom:24px;box-shadow:0 4px 24px var(--gg)}
+.summary-box .tag{font-size:12px;letter-spacing:3px;color:rgba(255,255,255,0.7);font-weight:700;margin-bottom:12px}
+.summary-stats{display:flex;justify-content:center;gap:40px;flex-wrap:wrap}
+.summary-stat .num{font-size:32px;font-weight:900;color:#FFF}
+.summary-stat .lbl{font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:1px;margin-top:2px}
+
+.cta-btn{display:block;width:100%;max-width:500px;margin:20px auto;padding:16px;background:linear-gradient(135deg,var(--g),var(--gl));border:none;border-radius:10px;color:#FFF;font-size:15px;font-weight:800;text-align:center;text-decoration:none;box-shadow:0 4px 20px var(--gg)}
+.rto{text-align:center;font-size:11px;color:var(--light);margin-top:24px;padding-bottom:32px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="tag">3CIR — CAREER SIMULATION</div>
+  <h1>See Your Career Future</h1>
+  <p>Tell us about your background and we'll map out your qualification pathway, the jobs that open up, and your projected salary growth — all based on real Australian data.</p>
+</div>
+
+<div class="wrap">
+  <div class="form-grid">
+    <div>
+      <label class="section">YOUR BACKGROUND</label>
+      <select id="background">
+        <option value="">Select your background...</option>
+        <optgroup label="Military">
+          <option value="army">Australian Army</option>
+          <option value="navy">Royal Australian Navy</option>
+          <option value="airforce">Royal Australian Air Force</option>
+        </optgroup>
+        <optgroup label="Emergency Services">
+          <option value="police">Police</option>
+          <option value="fire">Fire & Rescue</option>
+          <option value="ambulance">Ambulance / Paramedic</option>
+          <option value="ses">SES</option>
+          <option value="corrections">Corrections</option>
+        </optgroup>
+        <optgroup label="Civilian">
+          <option value="business">Business / Corporate</option>
+          <option value="government">Government / Public Service</option>
+          <option value="trades">Trades / Technical</option>
+          <option value="healthcare">Healthcare</option>
+          <option value="other">Other</option>
+        </optgroup>
+      </select>
+    </div>
+    <div>
+      <label class="section">YEARS OF EXPERIENCE</label>
+      <select id="years">
+        <option value="">Select years...</option>
+        <option value="2">2–4 years</option>
+        <option value="5">5–7 years</option>
+        <option value="8">8–10 years</option>
+        <option value="12">12–15 years</option>
+        <option value="18">18–20 years</option>
+        <option value="22">20+ years</option>
+      </select>
+    </div>
+    <div>
+      <label class="section">YOUR INTEREST AREA</label>
+      <select id="interest">
+        <option value="">Select area...</option>
+        <option value="leadership">Leadership & Management</option>
+        <option value="project">Project Management</option>
+        <option value="whs">Work Health & Safety</option>
+        <option value="hr">Human Resources</option>
+        <option value="security">Security & Risk</option>
+        <option value="cyber">Cyber Security</option>
+        <option value="business">Business & Operations</option>
+        <option value="government">Government & Investigations</option>
+        <option value="corrections">Corrections</option>
+      </select>
+    </div>
+    <div>
+      <label class="section">CURRENT SALARY (APPROX)</label>
+      <select id="salary">
+        <option value="">Select range...</option>
+        <option value="50000">$40K–$60K</option>
+        <option value="70000">$60K–$80K</option>
+        <option value="90000">$80K–$100K</option>
+        <option value="110000">$100K–$120K</option>
+        <option value="130000">$120K–$140K</option>
+        <option value="150000">$140K+</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="sim-btn" onclick="simulate()">SIMULATE MY CAREER PATHWAY</button>
+
+  <div id="resultsSection" class="hidden"></div>
+
+  <div class="rto">Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).</div>
+</div>
+
+<script>
+const PATHWAYS={
+leadership:{
+  name:'Leadership & Management',
+  levels:[
+    {level:'Certificate IV',code:'BSB40520',name:'Certificate IV in Leadership and Management',price:1150,dp:1035,dur:'2–3 weeks',salMin:65000,salMax:90000,demand:'Very High',roles:['Team Leader','Supervisor','Section Manager','Operations Coordinator'],minYrs:2},
+    {level:'Diploma',code:'BSB50420',name:'Diploma of Leadership and Management',price:1500,dp:1350,dur:'2–4 weeks',salMin:80000,salMax:120000,demand:'Very High',roles:['Operations Manager','Department Head','Senior Manager','Branch Manager'],minYrs:5},
+    {level:'Advanced Diploma',code:'BSB60420',name:'Advanced Diploma of Leadership and Management',price:2150,dp:1935,dur:'3–5 weeks',salMin:95000,salMax:140000,demand:'Very High',roles:['Director','Executive Manager','Regional Manager','General Manager'],minYrs:8},
+    {level:'Graduate Diploma',code:'BSB80320',name:'Graduate Diploma of Strategic Leadership',price:3650,dp:3285,dur:'4–6 weeks',salMin:120000,salMax:180000,demand:'Growing',roles:['CEO','Executive Director','Chief Operating Officer','Board Member'],minYrs:15}
+  ]
+},
+project:{
+  name:'Project Management',
+  levels:[
+    {level:'Certificate IV',code:'BSB40920',name:'Certificate IV in Project Management Practice',price:1150,dp:1035,dur:'2–3 weeks',salMin:70000,salMax:95000,demand:'Very High',roles:['Project Coordinator','PMO Analyst','Works Supervisor','Scheduling Officer'],minYrs:2},
+    {level:'Diploma',code:'BSB50820',name:'Diploma of Project Management',price:1500,dp:1350,dur:'2–4 weeks',salMin:85000,salMax:130000,demand:'Very High',roles:['Project Manager','Program Coordinator','Delivery Manager','PMO Manager'],minYrs:5},
+    {level:'Advanced Diploma',code:'BSB60720',name:'Advanced Diploma of Program Management',price:2150,dp:1935,dur:'3–5 weeks',salMin:100000,salMax:150000,demand:'High',roles:['Program Manager','Portfolio Manager','Delivery Director','Head of Projects'],minYrs:8},
+    {level:'Graduate Diploma',code:'BSB80220',name:'Graduate Diploma of Portfolio Management',price:3650,dp:3285,dur:'4–6 weeks',salMin:120000,salMax:180000,demand:'Growing',roles:['Head of PMO','Portfolio Director','Chief Delivery Officer','VP Projects'],minYrs:15}
+  ]
+},
+whs:{
+  name:'Work Health & Safety',
+  levels:[
+    {level:'Certificate III',code:'BSB30719',name:'Certificate III in Work Health and Safety',price:850,dp:765,dur:'2–3 weeks',salMin:55000,salMax:70000,demand:'High',roles:['WHS Officer','Safety Coordinator','Compliance Assistant'],minYrs:1},
+    {level:'Certificate IV',code:'BSB41419',name:'Certificate IV in Work Health and Safety',price:1150,dp:1035,dur:'2–3 weeks',salMin:70000,salMax:90000,demand:'Very High',roles:['WHS Advisor','Safety Manager','Compliance Officer','Risk Officer'],minYrs:3},
+    {level:'Diploma',code:'BSB51319',name:'Diploma of Work Health and Safety',price:1500,dp:1350,dur:'3–4 weeks',salMin:85000,salMax:115000,demand:'Very High',roles:['WHS Manager','Safety Director','Risk Manager','Head of Safety'],minYrs:5},
+    {level:'Advanced Diploma',code:'BSB60619',name:'Advanced Diploma of Work Health and Safety',price:2150,dp:1935,dur:'3–5 weeks',salMin:100000,salMax:140000,demand:'High',roles:['WHS Director','Chief Safety Officer','Enterprise Risk Director'],minYrs:10}
+  ]
+},
+hr:{
+  name:'Human Resources',
+  levels:[
+    {level:'Certificate IV',code:'BSB40420',name:'Certificate IV in Human Resource Management',price:1150,dp:1035,dur:'2–4 weeks',salMin:65000,salMax:85000,demand:'High',roles:['HR Coordinator','Recruitment Officer','People & Culture Advisor'],minYrs:2},
+    {level:'Diploma',code:'BSB50320',name:'Diploma of Human Resources Management',price:1500,dp:1350,dur:'3–4 weeks',salMin:80000,salMax:110000,demand:'High',roles:['HR Manager','People & Culture Manager','Workforce Planning Manager'],minYrs:5},
+    {level:'Advanced Diploma',code:'BSB60420',name:'Advanced Diploma of Leadership and Management',price:2150,dp:1935,dur:'3–5 weeks',salMin:95000,salMax:140000,demand:'Very High',roles:['HR Director','Chief People Officer','Executive Manager HR'],minYrs:10}
+  ]
+},
+security:{
+  name:'Security & Risk',
+  levels:[
+    {level:'Certificate IV',code:'CPP40719',name:'Certificate IV in Security Management',price:1150,dp:1035,dur:'2–4 weeks',salMin:65000,salMax:90000,demand:'High',roles:['Security Manager','Loss Prevention Manager','Security Consultant'],minYrs:2},
+    {level:'Certificate IV',code:'CPP41519',name:'Certificate IV in Security Risk Analysis',price:1150,dp:1035,dur:'2–4 weeks',salMin:70000,salMax:95000,demand:'High',roles:['Security Risk Analyst','Threat Assessor','Intelligence Analyst'],minYrs:3},
+    {level:'Diploma',code:'CPP50619',name:'Diploma of Security Risk Management',price:1500,dp:1350,dur:'3–4 weeks',salMin:85000,salMax:120000,demand:'High',roles:['Security Risk Manager','Security Director','Threat Intelligence Manager'],minYrs:5},
+    {level:'Advanced Diploma',code:'BSB60420',name:'Advanced Diploma of Leadership and Management',price:2150,dp:1935,dur:'3–5 weeks',salMin:95000,salMax:140000,demand:'Very High',roles:['Director of Security','Chief Security Officer','VP Risk'],minYrs:10}
+  ]
+},
+cyber:{
+  name:'Cyber Security',
+  levels:[
+    {level:'Certificate IV',code:'22603VIC',name:'Certificate IV in Cyber Security',price:1150,dp:1035,dur:'2–4 weeks',salMin:75000,salMax:110000,demand:'Very High',roles:['Cyber Security Analyst','SOC Operator','Information Security Officer'],minYrs:2},
+    {level:'Diploma',code:'BSB50420',name:'Diploma of Leadership and Management',price:1500,dp:1350,dur:'2–4 weeks',salMin:85000,salMax:130000,demand:'Very High',roles:['Security Team Lead','Cyber Operations Manager','IT Security Manager'],minYrs:5},
+    {level:'Advanced Diploma',code:'BSB60420',name:'Advanced Diploma of Leadership and Management',price:2150,dp:1935,dur:'3–5 weeks',salMin:110000,salMax:160000,demand:'Very High',roles:['CISO','Head of Cyber Security','Director of IT Security'],minYrs:8}
+  ]
+},
+business:{
+  name:'Business & Operations',
+  levels:[
+    {level:'Certificate III',code:'BSB30120',name:'Certificate III in Business',price:850,dp:765,dur:'2–3 weeks',salMin:50000,salMax:65000,demand:'High',roles:['Office Manager','Executive Assistant','Business Administrator'],minYrs:1},
+    {level:'Certificate IV',code:'BSB40120',name:'Certificate IV in Business',price:1150,dp:1035,dur:'2–4 weeks',salMin:60000,salMax:80000,demand:'High',roles:['Business Manager','Operations Coordinator','Team Supervisor'],minYrs:3},
+    {level:'Diploma',code:'BSB50120',name:'Diploma of Business',price:1500,dp:1350,dur:'3–4 weeks',salMin:75000,salMax:100000,demand:'High',roles:['Business Manager','Operations Manager','General Manager'],minYrs:5},
+    {level:'Advanced Diploma',code:'BSB60120',name:'Advanced Diploma of Business',price:2150,dp:1935,dur:'3–5 weeks',salMin:90000,salMax:130000,demand:'High',roles:['General Manager','Executive Manager','Business Development Director'],minYrs:10}
+  ]
+},
+government:{
+  name:'Government & Investigations',
+  levels:[
+    {level:'Certificate IV',code:'PSP40316',name:'Certificate IV in Government Security',price:1150,dp:1035,dur:'2–4 weeks',salMin:70000,salMax:95000,demand:'Steady',roles:['Government Security Advisor','Vetting Officer','Protective Security Officer'],minYrs:2},
+    {level:'Certificate IV',code:'PSP40416',name:'Certificate IV in Government Investigations',price:1150,dp:1035,dur:'2–4 weeks',salMin:70000,salMax:95000,demand:'Steady',roles:['Government Investigator','Compliance Investigator','Regulatory Officer'],minYrs:3},
+    {level:'Diploma',code:'PSP50316',name:'Diploma of Government Security',price:1500,dp:1350,dur:'3–4 weeks',salMin:85000,salMax:115000,demand:'Steady',roles:['Senior Security Advisor','PSPF Advisor','Security Branch Manager'],minYrs:5},
+    {level:'Diploma',code:'PSP50416',name:'Diploma of Government Investigations',price:1500,dp:1350,dur:'3–4 weeks',salMin:85000,salMax:115000,demand:'Steady',roles:['Senior Investigator','Investigation Team Leader','Integrity Officer'],minYrs:7}
+  ]
+},
+corrections:{
+  name:'Corrections',
+  levels:[
+    {level:'Certificate IV',code:'CSC40122',name:'Certificate IV in Correctional Practice',price:1250,dp:1125,dur:'2–4 weeks',salMin:65000,salMax:85000,demand:'High',roles:['Correctional Officer','Case Manager','Community Corrections Officer'],minYrs:2},
+    {level:'Diploma',code:'CSC50122',name:'Diploma of Correctional Administration',price:1750,dp:1575,dur:'3–5 weeks',salMin:80000,salMax:105000,demand:'Steady',roles:['Senior Correctional Officer','Unit Manager','Programs Manager'],minYrs:5},
+    {level:'Advanced Diploma',code:'BSB60420',name:'Advanced Diploma of Leadership and Management',price:2150,dp:1935,dur:'3–5 weeks',salMin:95000,salMax:140000,demand:'Very High',roles:['Operations Manager','Director Corrective Services','General Manager'],minYrs:10}
+  ]
+}
+};
+
+const BG_LABELS={army:'Australian Army',navy:'Royal Australian Navy',airforce:'Royal Australian Air Force',police:'Police',fire:'Fire & Rescue',ambulance:'Ambulance / Paramedic',ses:'SES',corrections:'Corrections',business:'Business / Corporate',government:'Government / Public Service',trades:'Trades / Technical',healthcare:'Healthcare',other:'Other'};
+
+function fmt(n){return '$'+Math.round(n/1000)+'K'}
+function fmtFull(n){return '$'+n.toLocaleString('en-AU')}
+
+function simulate(){
+  const bg=document.getElementById('background').value;
+  const yrs=parseInt(document.getElementById('years').value);
+  const interest=document.getElementById('interest').value;
+  const currentSal=parseInt(document.getElementById('salary').value);
+  if(!bg||!yrs||!interest||!currentSal){alert('Please fill in all four fields to simulate your career pathway.');return;}
+
+  const pathway=PATHWAYS[interest];
+  if(!pathway)return;
+
+  // Filter quals based on years of experience
+  const eligible=pathway.levels.filter(l=>yrs>=l.minYrs);
+  if(eligible.length===0){alert('Based on your years of experience, you may need a bit more time before qualifying. Please contact us to discuss your options.');return;}
+
+  // Calculate projections
+  const topQual=eligible[eligible.length-1];
+  const salaryGrowth=topQual.salMax-currentSal;
+  const totalInvestment=eligible.reduce((sum,q)=>sum+q.dp,0);
+  const totalWeeks=eligible.length*3;
+  const roiMultiple=totalInvestment>0?Math.round(salaryGrowth/totalInvestment*10)/10:0;
+
+  let html='<div class="results">';
+
+  // Summary Box
+  html+=`<div class="summary-box">
+    <div class="tag">YOUR CAREER SIMULATION</div>
+    <div class="summary-stats">
+      <div class="summary-stat"><div class="num">${eligible.length}</div><div class="lbl">QUALIFICATIONS</div></div>
+      <div class="summary-stat"><div class="num">${fmt(topQual.salMax)}</div><div class="lbl">EARNING POTENTIAL</div></div>
+      <div class="summary-stat"><div class="num">${fmtFull(totalInvestment)}</div><div class="lbl">TOTAL INVESTMENT</div></div>
+      <div class="summary-stat"><div class="num">~${totalWeeks}wks</div><div class="lbl">TOTAL TIME</div></div>
+    </div>
+  </div>`;
+
+  // Timeline
+  html+='<label class="section" style="margin-bottom:16px">YOUR CAREER TIMELINE</label>';
+  html+='<div class="timeline">';
+
+  // NOW marker
+  html+=`<div class="tl-item">
+    <div class="tl-dot now"></div>
+    <div class="tl-card">
+      <div class="tl-label now-label">NOW — WHERE YOU ARE</div>
+      <div class="tl-title">${BG_LABELS[bg]||bg} — ${yrs} Years Experience</div>
+      <div class="tl-sub">Current estimated salary: ${fmtFull(currentSal)}/year</div>
+      <div class="tl-tags"><span class="tl-tag tag-salary">${fmt(currentSal)}/yr current</span></div>
+    </div>
+  </div>`;
+
+  // Qualification stages
+  eligible.forEach((q,i)=>{
+    const isFinal=i===eligible.length-1;
+    html+=`<div class="tl-item">
+      <div class="tl-dot qual"></div>
+      <div class="tl-card${isFinal?' highlight':''}">
+        <div class="tl-label qual-label">STAGE ${i+1} — ${q.level.toUpperCase()}</div>
+        <div class="tl-title">${q.name}</div>
+        <div class="tl-sub">${q.code} — ${q.dur} to complete through RPL</div>
+        <div class="tl-tags">
+          <span class="tl-tag tag-price">${fmtFull(q.dp)} (10% off)</span>
+          <span class="tl-tag tag-time">${q.dur}</span>
+          <span class="tl-tag tag-salary">${fmt(q.salMin)}–${fmt(q.salMax)}</span>
+          <span class="tl-tag tag-demand">${q.demand} demand</span>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  // Future marker
+  html+=`<div class="tl-item">
+    <div class="tl-dot future"></div>
+    <div class="tl-card">
+      <div class="tl-label future-label">YOUR FUTURE — 12 MONTHS FROM NOW</div>
+      <div class="tl-title">${eligible.length} Nationally Recognised Qualification${eligible.length>1?'s':''}</div>
+      <div class="tl-sub">With ${yrs} years of experience and ${eligible.length===1?'a '+topQual.level:eligible.length+' qualifications'}, you'll be qualified for senior roles earning ${fmt(topQual.salMin)}–${fmt(topQual.salMax)} per year. That's ${salaryGrowth>0?'a potential '+fmtFull(salaryGrowth)+'/year increase':'at the top of your range already'}.</div>
+      <div class="tl-tags"><span class="tl-tag tag-salary">${fmt(topQual.salMax)}/yr potential</span></div>
+    </div>
+  </div>`;
+
+  html+='</div>';
+
+  // Salary Chart
+  html+=`<div class="salary-chart">
+    <label class="section" style="margin-bottom:16px">SALARY PROGRESSION</label>
+    <div class="chart-bars">`;
+
+  const maxSal=Math.max(topQual.salMax,currentSal+10000);
+  const allBars=[{label:'Now',val:currentSal,color:'var(--light)'}];
+  eligible.forEach(q=>{allBars.push({label:q.level.replace('Certificate ','Cert '),val:q.salMax,color:'var(--g)'})});
+  allBars.forEach(bar=>{
+    const h=Math.max(20,Math.round((bar.val/maxSal)*180));
+    html+=`<div class="chart-bar-wrap">
+      <div class="chart-bar" style="height:${h}px;background:${bar.color}"><div class="val" style="color:${bar.color}">${fmt(bar.val)}</div></div>
+      <div class="chart-bar-label">${bar.label}</div>
+    </div>`;
+  });
+
+  html+=`</div></div>`;
+
+  // Roles Grid
+  html+=`<div class="roles-section">
+    <label class="section">CAREER ROLES THAT OPEN UP</label>
+    <div class="roles-grid">`;
+  const allRoles=[];
+  eligible.forEach(q=>{q.roles.forEach(r=>{
+    if(!allRoles.find(x=>x.title===r))allRoles.push({title:r,sal:fmt(q.salMin)+'–'+fmt(q.salMax)});
+  })});
+  allRoles.forEach(r=>{
+    html+=`<div class="role-chip"><div class="title">${r.title}</div><div class="sal">${r.sal}</div></div>`;
+  });
+  html+=`</div></div>`;
+
+  // Investment Summary
+  html+=`<div style="background:var(--card);border-radius:12px;border:1px solid var(--border);padding:24px;margin-bottom:24px;box-shadow:0 2px 12px rgba(0,0,0,0.04)">
+    <label class="section" style="margin-bottom:12px">INVESTMENT SUMMARY</label>`;
+  eligible.forEach(q=>{
+    html+=`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #EEF3F0;font-size:14px">
+      <div>${q.name}<br><span style="font-size:11px;color:var(--light)">${q.dur}</span></div>
+      <div style="font-weight:700;color:var(--gd)">${fmtFull(q.dp)}</div>
+    </div>`;
+  });
+  html+=`<div style="display:flex;justify-content:space-between;padding:12px 0 0;font-size:18px">
+    <div style="font-weight:700">Total (with 10% discount)</div>
+    <div style="font-weight:800;color:var(--gd)">${fmtFull(totalInvestment)}</div>
+  </div>`;
+  if(salaryGrowth>0){
+    html+=`<div style="font-size:13px;color:var(--g);margin-top:8px;font-weight:600">Potential salary increase of ${fmtFull(salaryGrowth)}/year — that's a ${roiMultiple}× return on investment in year one alone.</div>`;
+  }
+  html+=`</div>`;
+
+  // CTA
+  html+=`<a href="https://www.3cir.com/public/" target="_blank" class="cta-btn">Start Your Free RPL Assessment →</a>`;
+  html+=`<p style="text-align:center;color:var(--muted);font-size:13px;margin-top:12px">Not sure which qualification to start with? Our AI assistant can help — chat with us on the website.</p>`;
+
+  html+='</div>';
+
+  const section=document.getElementById('resultsSection');
+  section.innerHTML=html;
+  section.classList.remove('hidden');
+  section.scrollIntoView({behavior:'smooth'});
+}
+</script>
+</body>
+</html>
