@@ -445,6 +445,21 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   const seekData = seek.getJobDataSummary();
   const absData = abs.getLabourDataSummary();
 
+  // === EVIDENCE SCANNER: Add file context to system prompt so Claude knows about uploads ===
+  let fileContext = '';
+  if (s.uploadedFiles && s.uploadedFiles.length > 0) {
+    const fileNames = s.uploadedFiles.map(f => f.name).join(', ');
+    const hasContact = !!(s.contactId || s.email || s.phone);
+    const hasQuals = (s.qualsDiscussed || []).length > 0;
+    fileContext = '\n\nFILES UPLOADED IN THIS SESSION:\n' + fileNames;
+    if (hasContact && hasQuals && s.uploadedFileBuffer) {
+      fileContext += '\nALL THREE CONDITIONS MET: The visitor has uploaded a file, discussed qualifications, AND provided contact details. You SHOULD offer the evidence check now. Say something like: "I can see you\'ve uploaded your ' + s.uploadedFiles[s.uploadedFiles.length - 1].name + '. Would you like me to run a quick evidence check against the [qualification name]? It takes about 30 seconds."';
+    } else if (!hasContact) {
+      fileContext += '\nFile uploaded but contact details not yet captured. Continue the conversation naturally — collect their name and email before offering the evidence check.';
+    }
+  }
+  const fullSystemPrompt = buildSystemPrompt(s.audience, pageUrl || '', seekData, absData) + fileContext;
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -464,7 +479,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
         stream = await anthropic.messages.stream({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 2048,
-          system: buildSystemPrompt(s.audience, pageUrl || '', seekData, absData),
+          system: fullSystemPrompt,
           messages: msgs,
         });
         break;
@@ -594,9 +609,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       s.uploadedFileBuffer = file.buffer;
       s.uploadedFileMime = file.mimetype;
       s.uploadedFileName = file.originalname;
-
-      // Inject upload notification into conversation so Claude knows about it
-      s.messages.push({ role: 'user', content: `[File uploaded: ${file.originalname}]` });
 
       sessions.set(sessionId, s);
 
