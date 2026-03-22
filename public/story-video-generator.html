@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3CIR — AI Success Story Video Generator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--g:#1b8466;--gl:#24a882;--gd:#14614c;--gold:#F5A800;--dark:#1A1A1A;--blue:#1565C0;--bg:#F8FBF9;--card:#FFF;--border:#DCE8E3;--text:#1A2E26;--muted:#4A6B5C}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+
+/* CONTROL PANEL */
+.panel{max-width:1100px;margin:0 auto;padding:24px 20px}
+.panel h1{font-size:24px;font-weight:800;margin-bottom:4px}
+.panel .sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+.api-row{display:flex;gap:12px;margin-bottom:20px;align-items:end}
+.api-row label{font-size:11px;letter-spacing:1px;color:var(--g);font-weight:700;display:block;margin-bottom:4px}
+.api-row input,.api-row select{padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;background:#FFF}
+.api-row input:focus,.api-row select:focus{border-color:var(--g)}
+.api-row input[type=text]{flex:1}
+.stories-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-bottom:24px}
+.story-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all 0.2s}
+.story-card:hover{border-color:var(--g);box-shadow:0 4px 16px rgba(27,132,102,0.15)}
+.story-card.selected{border-color:var(--g);background:rgba(27,132,102,0.04);box-shadow:0 4px 16px rgba(27,132,102,0.15)}
+.story-card .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:1px;margin-bottom:8px}
+.tag-mil{background:#FFF3E0;color:#E65100}
+.tag-emergency{background:#FCE4EC;color:#C62828}
+.tag-security{background:#E8EAF6;color:#283593}
+.tag-online{background:#E3F2FD;color:var(--blue)}
+.tag-civilian{background:#E8F5E9;color:var(--gd)}
+.story-card .name{font-weight:700;font-size:15px;margin-bottom:4px}
+.story-card .qual{font-size:12px;color:var(--g);margin-bottom:8px}
+.story-card .preview{font-size:13px;color:var(--muted);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.gen-btn{padding:14px 32px;background:linear-gradient(135deg,var(--g),var(--gl));border:none;border-radius:10px;color:#FFF;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:24px}
+.gen-btn:disabled{opacity:0.5;cursor:not-allowed}
+.status{font-size:13px;color:var(--muted);margin-bottom:16px;min-height:20px}
+
+/* VIDEO PREVIEW */
+.video-container{display:none;max-width:600px;margin:0 auto 32px}
+.video-frame{position:relative;width:100%;aspect-ratio:1/1;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,var(--dark) 0%,#2a2a2a 50%,var(--dark) 100%)}
+.video-frame .logo{position:absolute;top:24px;left:24px;font-size:24px;font-weight:900;color:var(--gold);letter-spacing:2px}
+.video-frame .stars{position:absolute;top:24px;right:24px;font-size:20px;color:var(--gold)}
+.video-frame .quote-area{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:85%;text-align:center}
+.video-frame .quote{font-size:20px;color:#FFF;line-height:1.5;font-style:italic;opacity:0;transition:opacity 0.8s}
+.video-frame .quote.visible{opacity:1}
+.video-frame .reviewer{position:absolute;bottom:60px;left:0;right:0;text-align:center;opacity:0;transition:opacity 0.8s}
+.video-frame .reviewer.visible{opacity:1}
+.video-frame .reviewer .rname{font-size:16px;font-weight:700;color:var(--gold)}
+.video-frame .reviewer .rqual{font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px}
+.video-frame .cta{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.4)}
+.video-frame .disclaimer{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:8px;color:rgba(255,255,255,0.2)}
+.video-controls{display:flex;gap:12px;justify-content:center;margin-top:16px}
+.video-controls button{padding:10px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+.play-btn{background:var(--g);color:#FFF;border:none}
+.download-btn{background:#FFF;color:var(--g);border:1px solid var(--g)}
+
+/* Script view */
+.script-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;display:none}
+.script-box h3{font-size:14px;font-weight:700;margin-bottom:8px}
+.script-box textarea{width:100%;height:120px;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:13px;line-height:1.6;resize:vertical;font-family:inherit}
+.script-box .duration{font-size:11px;color:var(--muted);margin-top:4px}
+audio{width:100%;margin-top:12px;border-radius:8px}
+.rto{text-align:center;font-size:11px;color:var(--muted);margin-top:24px;padding-bottom:32px}
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <h1>3CIR — AI Success Story Video Generator</h1>
+  <p class="sub">Select a story, generate the voiceover with ElevenLabs, and preview the branded video. Audio files can be combined with Canva templates for social media.</p>
+
+  <div class="api-row">
+    <div style="flex:1">
+      <label>ELEVENLABS API KEY</label>
+      <input type="text" id="apiKey" placeholder="Paste your ElevenLabs API key" style="width:100%">
+    </div>
+    <div>
+      <label>VOICE</label>
+      <select id="voiceId">
+        <option value="cjVigY5qzO86Huf0OWal">Eric — Smooth, Trustworthy (current)</option>
+        <option value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm, Professional</option>
+        <option value="EXAVITQu4vr4xnSDxMaL">Bella — Warm, Friendly</option>
+        <option value="ErXwobaYiN019PkySvjV">Antoni — Professional Male</option>
+        <option value="VR6AewLTigWG4xSOukaG">Arnold — Australian Male</option>
+      </select>
+    </div>
+    <div>
+      <label>BRAND</label>
+      <select id="brand" onchange="updateBrand()">
+        <option value="services">Services (Gold/Dark)</option>
+        <option value="public">Public (Green)</option>
+        <option value="online">Online (Blue)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="stories-grid" id="storiesGrid"></div>
+
+  <div class="script-box" id="scriptBox">
+    <h3>Narration Script <span id="scriptDuration" style="font-weight:400;color:var(--muted)"></span></h3>
+    <textarea id="scriptText"></textarea>
+    <div class="duration">Approx. <span id="wordCount">0</span> words · ~<span id="estDuration">0</span> seconds at natural pace</div>
+  </div>
+
+  <button class="gen-btn" id="genBtn" onclick="generateAudio()" disabled>Generate Voiceover</button>
+  <div class="status" id="status"></div>
+
+  <div class="video-container" id="videoContainer">
+    <div class="video-frame" id="videoFrame">
+      <div class="logo">3CIR</div>
+      <div class="stars">★★★★★</div>
+      <div class="quote-area">
+        <div class="quote" id="quoteText"></div>
+      </div>
+      <div class="reviewer" id="reviewerInfo">
+        <div class="rname" id="rName"></div>
+        <div class="rqual" id="rQual"></div>
+      </div>
+      <div class="cta">3CIR.COM | COURAGE · COMMITMENT · COMRADERY · INTEGRITY · RESPECT</div>
+      <div class="disclaimer">Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).</div>
+    </div>
+    <audio id="audioPlayer" controls></audio>
+    <div class="video-controls">
+      <button class="play-btn" onclick="playPreview()">▶ Play Preview</button>
+      <button class="download-btn" onclick="downloadAudio()">↓ Download Audio</button>
+    </div>
+  </div>
+
+  <div class="rto">Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).</div>
+</div>
+
+<script>
+// ============================================================
+// 10 STORIES — All from real Trustindex reviews (trustindex.io/reviews/www.3cir.com)
+// Names and qualifications are real and public
+// ============================================================
+const STORIES = [
+  {
+    id: 1,
+    name: 'Benjamin Oliver',
+    segment: 'security',
+    qual: 'Cert III + Cert IV + Diploma in Security',
+    tagLabel: 'SECURITY',
+    tagClass: 'tag-security',
+    review: "I stumbled across 3CIR by chance when I was looking to RPL skills from my previous job training and experience to tangible qualifications. I submitted my resume, and the rest is history. I now have a Certificate III in Security Operations, Certificate IV in Security Management and a Diploma in Security Risk Management. I'm tracking to get another two Diplomas in 2026.",
+    script: "Benjamin had years of security experience but no formal qualifications to show for it. He found 3CIR online and decided to give RPL a go. After submitting his resume, the team mapped his experience to three nationally recognised qualifications. Today, Benjamin holds a Certificate Three in Security Operations, a Certificate Four in Security Management, and a Diploma of Security Risk Management. He's now working towards two more Diplomas. From no qualifications to five, all from the experience he already had. That's the power of RPL with 3CIR.",
+    quoteSlides: [
+      '"I submitted my resume, and the rest is history."',
+      'Certificate III · Certificate IV · Diploma — all from experience he already had.',
+      'Now tracking for two MORE Diplomas in 2026.'
+    ]
+  },
+  {
+    id: 2,
+    name: 'Shaun Kober',
+    segment: 'military',
+    qual: 'Graduate Diploma of Strategic Leadership',
+    tagLabel: 'MILITARY',
+    tagClass: 'tag-mil',
+    review: "Matt at 3CIR was fantastic in helping me attain a Graduate Diploma through Asset College. His communication whilst guiding me through the process was excellent, and his work was timely and efficient. I'm thrilled with how smooth the process was.",
+    script: "Shaun spent years leading teams in high-pressure environments. When it came time to formalise that experience into a qualification, he turned to 3CIR. The result? A Graduate Diploma of Strategic Leadership, the highest nationally recognised management qualification in Australia. Shaun described the process as smooth, with excellent communication and efficient turnaround every step of the way. From years of leadership on the ground to a Graduate Diploma on paper. That's recognition of prior learning, done right.",
+    quoteSlides: [
+      '"The process was smooth, with excellent communication every step of the way."',
+      'Graduate Diploma of Strategic Leadership — the highest management qualification in Australia.',
+      'Years of real leadership, now formally recognised.'
+    ]
+  },
+  {
+    id: 3,
+    name: 'Edward Le',
+    segment: 'military',
+    qual: 'RPL for Ex-Serviceman',
+    tagLabel: 'MILITARY',
+    tagClass: 'tag-mil',
+    review: "As an Ex-Serviceman, dealing with 3CIR was very easy with extremely fast turn arounds. I would strongly recommend for anyone that is transitioning into civilian life to give 3CIR a call or an email.",
+    script: "Edward served his country with distinction. But when he transitioned out of the Australian Defence Force, he discovered his years of military training didn't automatically translate to civilian qualifications. That's where 3CIR stepped in. As a veteran-owned company, 3CIR understands the unique skills that come from military service. Edward found the process easy, with fast turnarounds that respected his time. His message to anyone transitioning into civilian life? Give 3CIR a call. Your military experience is worth more than you think.",
+    quoteSlides: [
+      '"As an ex-serviceman, dealing with 3CIR was very easy."',
+      '"Extremely fast turnarounds."',
+      '"I would strongly recommend for anyone transitioning into civilian life."'
+    ]
+  },
+  {
+    id: 4,
+    name: 'Edward Allan',
+    segment: 'emergency',
+    qual: 'RPL for Emergency Services',
+    tagLabel: 'EMERGENCY SERVICES',
+    tagClass: 'tag-emergency',
+    review: "Excellent experience with Matt from 3CIR; helped me through all steps of the process, provided clear guidance, and was very professional and efficient. Highly recommended to anyone with an emergency services background looking for assistance in the RPL process.",
+    script: "Edward spent years on the front line in emergency services. Responding to crises, managing teams under pressure, making split-second decisions that save lives. Skills like that deserve formal recognition. Edward went through the RPL process with 3CIR and described it as excellent. Clear guidance at every step, professional service, and an efficient turnaround. His recommendation? If you've got an emergency services background, 3CIR is the team to talk to. Your experience on the front line is already a qualification waiting to be recognised.",
+    quoteSlides: [
+      '"Clear guidance at every step, professional and efficient."',
+      'Years on the front line. Skills that deserve formal recognition.',
+      '"Highly recommended to anyone with an emergency services background."'
+    ]
+  },
+  {
+    id: 5,
+    name: 'Chantelle',
+    segment: 'civilian',
+    qual: 'Graduate Diploma',
+    tagLabel: 'GRADUATE DIPLOMA',
+    tagClass: 'tag-civilian',
+    review: "I had an excellent experience with 3CIR while completing my Graduate Diploma. They were thorough in ensuring all outcomes were achieved, while providing clear guidance on expectations, consistent support, and timely communication throughout the entire process. I always felt confident and well-informed. Their professionalism and commitment to supporting students is outstanding.",
+    script: "Chantelle had the experience. The leadership skills. The career runs on the board. What she needed was the qualification to match. Through 3CIR, Chantelle completed her Graduate Diploma with what she described as outstanding professionalism and commitment. Clear expectations, consistent support, and timely communication at every stage. She always felt confident and well-informed throughout the entire process. The result? A nationally recognised Graduate Diploma that reflects the leader she already was. If your experience has outpaced your qualifications, 3CIR can close that gap.",
+    quoteSlides: [
+      '"I always felt confident and well-informed throughout the entire process."',
+      'Outstanding professionalism. Consistent support. Clear expectations.',
+      'A Graduate Diploma that reflects the leader she already was.'
+    ]
+  },
+  {
+    id: 6,
+    name: 'Sophia Velegrinis',
+    segment: 'security',
+    qual: 'Certificate IV in Government Security',
+    tagLabel: 'GOVERNMENT SECURITY',
+    tagClass: 'tag-security',
+    review: "I just completed my Certificate IV in Government Security and could not of had a better experience. My trainer was Matthew and he was so prompt with his marking and always provided excellent feedback. I highly recommend this company for anyone needing to complete a Cert.",
+    script: "Sophia needed her Certificate Four in Government Security and chose 3CIR to get it done. She couldn't have been happier with the experience. Prompt marking, excellent feedback, and a team that made the process feel effortless. Sophia completed her qualification smoothly and now has a nationally recognised certification that opens doors across government, defence, and security sectors. If you're looking to formalise your government security experience, Sophia's advice is simple. Choose 3CIR.",
+    quoteSlides: [
+      '"Could not have had a better experience."',
+      'Certificate IV in Government Security — completed smoothly.',
+      '"I highly recommend this company for anyone needing to complete a Cert."'
+    ]
+  },
+  {
+    id: 7,
+    name: 'X S',
+    segment: 'emergency',
+    qual: '2 Diplomas + 3 Certificate IVs',
+    tagLabel: 'EMERGENCY SERVICES',
+    tagClass: 'tag-emergency',
+    review: "I can't recommend 3CIR enough! I RPLd 2 diplomas and 3 cert IVs and Matt was nothing but helpful and encouraging. He even gave advice on which options would be better ways of investing money into my education. Their prices are extremely reasonable especially with the emergency services discount.",
+    script: "Five qualifications. Two Diplomas and three Certificate Fours. All from experience already earned through years of emergency services work. That's what one 3CIR client achieved through Recognition of Prior Learning. They described the team as helpful, encouraging, and great at advising which qualifications would be the best investment. With 3CIR's emergency services discount, the pricing was extremely reasonable. Five nationally recognised qualifications, all earned without sitting in a classroom. If you've served in emergency services, your experience could be worth more credentials than you realise.",
+    quoteSlides: [
+      '2 Diplomas + 3 Certificate IVs — all from existing experience.',
+      '"Prices are extremely reasonable, especially with the emergency services discount."',
+      '"I can\'t recommend 3CIR enough!"'
+    ]
+  },
+  {
+    id: 8,
+    name: 'Trevor Manyame',
+    segment: 'civilian',
+    qual: 'Advanced Diploma of WHS',
+    tagLabel: 'WORK HEALTH & SAFETY',
+    tagClass: 'tag-civilian',
+    review: "Completing my Advanced Diploma of WHS through 3CIR was seamless and rewarding. The team was professional, responsive, and supportive, making the process smooth and efficient.",
+    script: "Trevor had years of work health and safety experience under his belt. He needed a qualification that reflected his expertise at the highest level. Through 3CIR, Trevor completed his Advanced Diploma of Work Health and Safety, describing the experience as seamless and rewarding. Professional, responsive, and supportive from start to finish. The Advanced Diploma of WHS is one of the most in-demand qualifications in Australia, with safety professionals earning between one hundred and one hundred and forty thousand dollars a year. Trevor turned his experience into a qualification. You can too.",
+    quoteSlides: [
+      '"Seamless and rewarding."',
+      'Advanced Diploma of WHS — one of the most in-demand qualifications in Australia.',
+      'Professional, responsive, and supportive from start to finish.'
+    ]
+  },
+  {
+    id: 9,
+    name: 'Kaidanovsky',
+    segment: 'online',
+    qual: 'Diploma via Online Study',
+    tagLabel: 'ONLINE STUDY',
+    tagClass: 'tag-online',
+    review: "Recently completed a diploma with 3CIR via online study. The trainers were great, and my work was marked quickly. Any questions that I had were answered immediately. I would recommend it to anyone looking to study online.",
+    script: "Not everyone has years of experience to draw on for RPL. Some people want to build new skills from the ground up. That's exactly what one 3CIR student did, completing a Diploma through online study. They found the trainers great, the marking fast, and every question answered immediately. 3CIR's online study platform lets you learn at your own pace, from anywhere in Australia. Whether you're upskilling for a promotion or starting a new career path, the support is there from day one. RPL or online study, 3CIR has a pathway that fits.",
+    quoteSlides: [
+      '"The trainers were great and my work was marked quickly."',
+      '"Any questions I had were answered immediately."',
+      'RPL or online study — 3CIR has a pathway that fits.'
+    ]
+  },
+  {
+    id: 10,
+    name: 'Jordan Cooper',
+    segment: 'security',
+    qual: 'Certificate IV in Government Security',
+    tagLabel: 'GOVERNMENT SECURITY',
+    tagClass: 'tag-security',
+    review: "I recently completed a Certificate IV in Government Security. He was absolutely fantastic and made the whole process very smooth. I was able to get my certificate completed in 3 weeks thanks to the quick marking and excellent feedback.",
+    script: "Three weeks. That's all it took for Jordan to earn his Certificate Four in Government Security through 3CIR. Quick marking, excellent feedback, and a process described as smooth from start to finish. The Certificate Four in Government Security opens doors across federal and state government agencies, defence, and intelligence. Jordan got his in less than a month. If you're working in government or security and don't have the paper to prove it, three weeks could change that. Start your free RPL assessment with 3CIR today.",
+    quoteSlides: [
+      'Certificate IV in Government Security — completed in just 3 weeks.',
+      '"Quick marking and excellent feedback."',
+      '"Absolutely fantastic — made the whole process very smooth."'
+    ]
+  }
+];
+
+// ============================================================
+// RENDER STORIES
+// ============================================================
+let selectedStory = null;
+let audioBlob = null;
+
+function renderStories() {
+  const grid = document.getElementById('storiesGrid');
+  grid.innerHTML = STORIES.map(s => `
+    <div class="story-card" id="card-${s.id}" onclick="selectStory(${s.id})">
+      <span class="tag ${s.tagClass}">${s.tagLabel}</span>
+      <div class="name">${s.name}</div>
+      <div class="qual">${s.qual}</div>
+      <div class="preview">${s.review}</div>
+    </div>
+  `).join('');
+}
+
+function selectStory(id) {
+  selectedStory = STORIES.find(s => s.id === id);
+  document.querySelectorAll('.story-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('card-' + id).classList.add('selected');
+
+  const box = document.getElementById('scriptBox');
+  box.style.display = 'block';
+  document.getElementById('scriptText').value = selectedStory.script;
+  updateWordCount();
+
+  document.getElementById('genBtn').disabled = false;
+  document.getElementById('videoContainer').style.display = 'none';
+  document.getElementById('status').textContent = 'Story selected. Edit the script if needed, then click Generate.';
+}
+
+function updateWordCount() {
+  const text = document.getElementById('scriptText').value;
+  const words = text.split(/\s+/).filter(w => w).length;
+  document.getElementById('wordCount').textContent = words;
+  document.getElementById('estDuration').textContent = Math.round(words / 2.5); // ~150 wpm = 2.5 wps
+}
+document.getElementById('scriptText')?.addEventListener('input', updateWordCount);
+
+// ============================================================
+// ELEVENLABS AUDIO GENERATION
+// ============================================================
+async function generateAudio() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { alert('Please paste your ElevenLabs API key'); return; }
+  if (!selectedStory) { alert('Please select a story first'); return; }
+
+  const voiceId = document.getElementById('voiceId').value;
+  const script = document.getElementById('scriptText').value;
+  const btn = document.getElementById('genBtn');
+  const status = document.getElementById('status');
+
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  status.textContent = 'Sending to ElevenLabs — this takes 10-20 seconds...';
+
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: script,
+        model_id: 'eleven_turbo_v2_5',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3, use_speaker_boost: true }
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`ElevenLabs error ${res.status}: ${err}`);
+    }
+
+    audioBlob = await res.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    document.getElementById('audioPlayer').src = audioUrl;
+
+    // Show video preview
+    document.getElementById('videoContainer').style.display = 'block';
+    document.getElementById('rName').textContent = selectedStory.name;
+    document.getElementById('rQual').textContent = selectedStory.qual;
+
+    status.textContent = 'Audio generated. Click Play Preview to see the branded video.';
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Generate Voiceover';
+}
+
+// ============================================================
+// VIDEO PREVIEW — Animated text sync
+// ============================================================
+function playPreview() {
+  if (!selectedStory) return;
+  const audio = document.getElementById('audioPlayer');
+  const quoteEl = document.getElementById('quoteText');
+  const reviewerEl = document.getElementById('reviewerInfo');
+  const slides = selectedStory.quoteSlides;
+
+  // Calculate timing
+  const duration = audio.duration || 30;
+  const slideTime = duration / (slides.length + 1); // +1 for reviewer reveal
+
+  // Reset
+  quoteEl.classList.remove('visible');
+  reviewerEl.classList.remove('visible');
+
+  audio.currentTime = 0;
+  audio.play();
+
+  // Animate slides
+  slides.forEach((text, i) => {
+    setTimeout(() => {
+      quoteEl.classList.remove('visible');
+      setTimeout(() => {
+        quoteEl.textContent = text;
+        quoteEl.classList.add('visible');
+      }, 300);
+    }, i * slideTime * 1000);
+  });
+
+  // Show reviewer at end
+  setTimeout(() => {
+    quoteEl.classList.remove('visible');
+    reviewerEl.classList.add('visible');
+  }, slides.length * slideTime * 1000);
+}
+
+function downloadAudio() {
+  if (!audioBlob || !selectedStory) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(audioBlob);
+  a.download = `3CIR_Story_${selectedStory.name.replace(/\s+/g, '_')}.mp3`;
+  a.click();
+}
+
+function updateBrand() {
+  const brand = document.getElementById('brand').value;
+  const frame = document.getElementById('videoFrame');
+  const logo = frame.querySelector('.logo');
+
+  if (brand === 'services') {
+    frame.style.background = 'linear-gradient(135deg, #1A1A1A 0%, #2a2a2a 50%, #1A1A1A 100%)';
+    logo.style.color = '#F5A800';
+    frame.querySelector('.stars').style.color = '#F5A800';
+  } else if (brand === 'public') {
+    frame.style.background = 'linear-gradient(135deg, #14614c 0%, #1b8466 50%, #14614c 100%)';
+    logo.style.color = '#FFF';
+    frame.querySelector('.stars').style.color = '#F5A800';
+  } else {
+    frame.style.background = 'linear-gradient(135deg, #0D47A1 0%, #1565C0 50%, #0D47A1 100%)';
+    logo.style.color = '#FFF';
+    frame.querySelector('.stars').style.color = '#F5A800';
+  }
+}
+
+// Init
+renderStories();
+</script>
+</body>
+</html>
