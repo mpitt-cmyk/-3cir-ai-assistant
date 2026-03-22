@@ -9,6 +9,9 @@
 // Both sites show RPL + Online Study prices.
 // ============================================================
 
+// === EVIDENCE SCANNER: Import prompt additions ===
+const { EVIDENCE_SCANNER_PROMPT_ADDITION } = require('./evidence-scanner-prompt');
+
 const QUALIFICATIONS = {
   services: [
     // CERTIFICATE II
@@ -149,7 +152,7 @@ TONE: Warm, encouraging, and approachable. Focus on career change and profession
 PRICING NOTE: Prices shown are current public prices. When quoting prices, just state the price as shown.
 DISCOUNT: If someone mentions military or emergency services background, redirect them to 3cir.com/services/ where the 25% discount applies.`;
 
-  return `You are the 3CIR AI Assistant — a knowledgeable, helpful guide on the 3CIR website. You help people understand Recognition of Prior Learning (RPL), online study options, and the qualifications available through 3CIR.
+  let prompt = `You are the 3CIR AI Assistant — a knowledgeable, helpful guide on the 3CIR website. You help people understand Recognition of Prior Learning (RPL), online study options, and the qualifications available through 3CIR.
 
 ${audienceBlock}
 
@@ -391,6 +394,11 @@ You do NOT need to say this in the chat conversation itself — it is included a
 
 ${seekData ? `\nJOB MARKET DATA (from SEEK — updated daily):\nUse this data when discussing career outcomes for specific qualifications. Quote the job count and salary range to show visitors what their qualification unlocks in the real job market. Never fabricate figures — only use what is listed here.\n${seekData}\n` : ''}
 ${absData ? `\n${absData}\n` : ''}`;
+
+  // === EVIDENCE SCANNER: Append scanner instructions to system prompt ===
+  prompt += EVIDENCE_SCANNER_PROMPT_ADDITION;
+
+  return prompt;
 }
 
 function detectAudience(referrerUrl) {
