@@ -375,14 +375,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.0',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.1',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.0', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.1', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -457,6 +457,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
     } else if (!hasContact) {
       fileContext += '\nFile uploaded but contact details not yet captured. Continue the conversation naturally — collect their name and email before offering the evidence check.';
     }
+    console.log(`[Evidence Debug] File context added to prompt. Files: ${fileNames}, hasContact: ${hasContact}, hasQuals: ${hasQuals}, hasBuffer: ${!!s.uploadedFileBuffer}`);
   }
   const fullSystemPrompt = buildSystemPrompt(s.audience, pageUrl || '', seekData, absData) + fileContext;
 
@@ -466,8 +467,12 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
   const hasFile = s.uploadedFileBuffer && s.uploadedFiles && s.uploadedFiles.length > 0;
   const hasContact = !!(s.contactId);
   const hasQuals = (s.qualsDiscussed || []).length > 0;
+  const scanMatch = scanPatterns.test(clean);
 
-  if (scanPatterns.test(clean) && hasFile && hasContact && hasQuals && !s.evidenceScanned) {
+  // === EVIDENCE SCANNER DEBUG: Log every condition on every message ===
+  console.log(`[Evidence Debug] Message: "${clean.substring(0, 60)}" | scanMatch: ${scanMatch} | hasFile: ${hasFile} | hasContact: ${hasContact} | hasQuals: ${hasQuals} | alreadyScanned: ${!!s.evidenceScanned} | contactId: ${s.contactId || 'NONE'} | qualsCount: ${(s.qualsDiscussed || []).length} | uploadedFiles: ${(s.uploadedFiles || []).length} | bufferSize: ${s.uploadedFileBuffer ? s.uploadedFileBuffer.length : 0}`);
+
+  if (scanMatch && hasFile && hasContact && hasQuals && !s.evidenceScanned) {
     try {
       const { analyseEvidence, extractWordText } = require('./services/evidence-scanner');
       const lastQual = s.qualsDiscussed[s.qualsDiscussed.length - 1];
@@ -514,11 +519,21 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
         }
 
         console.log(`[Evidence Scan] Complete: ${scan.score}% match for ${lastQual.code}`);
+      } else {
+        console.error(`[Evidence Scan] analyseEvidence returned success=false`);
       }
     } catch (scanErr) {
-      console.error('[Evidence Scan] Auto-trigger error:', scanErr.message);
+      console.error('[Evidence Scan] Auto-trigger error:', scanErr.message, scanErr.stack);
       // Non-blocking — chat continues normally without scan results
     }
+  } else if (scanMatch) {
+    // === EVIDENCE SCANNER DEBUG: Log WHY the scan was NOT triggered ===
+    const reasons = [];
+    if (!hasFile) reasons.push('NO FILE BUFFER (upload a file first)');
+    if (!hasContact) reasons.push('NO CONTACT ID (provide email/phone first)');
+    if (!hasQuals) reasons.push('NO QUALS DISCUSSED (discuss a qualification first)');
+    if (s.evidenceScanned) reasons.push('ALREADY SCANNED');
+    console.log(`[Evidence Debug] Scan keyword detected but NOT triggered. Missing: ${reasons.join(' | ')}`);
   }
   const chatSystemPrompt = fullSystemPrompt + scanResults;
 
@@ -674,10 +689,15 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
       sessions.set(sessionId, s);
 
+      // === EVIDENCE SCANNER DEBUG: Confirm buffer was stored ===
+      console.log(`[Evidence Debug] File buffer stored in session ${sessionId}. Buffer size: ${file.buffer.length} bytes, MIME: ${file.mimetype}, Name: ${file.originalname}`);
+
       // Add GHL note if contact exists
       if (s.contactId) {
         await ghl.addNote(s.contactId, `Resume/CV uploaded via chatbot: ${file.originalname} (${(file.size/1024).toFixed(0)}KB, ${file.mimetype})`).catch(() => {});
       }
+    } else {
+      console.log(`[Evidence Debug] WARNING: No session found for ${sessionId} — file buffer NOT stored`);
     }
 
     // Trigger file upload webhook if configured (Rex can build a workflow that emails it to Matt)
@@ -1097,6 +1117,71 @@ app.post('/api/voice-callback', async (req, res) => {
 });
 
 // ============================================================
+// POST /api/outbound-call — Trigger Vapi outbound follow-up call
+// ============================================================
+app.post('/api/outbound-call', async (req, res) => {
+  const { phone, name, email, qualification, audience, contactId, reason } = req.body;
+  if (!phone) return res.status(400).json({ ok: false, error: 'Phone number required' });
+
+  const vapiKey = process.env.VAPI_API_KEY;
+  const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;
+  if (!vapiKey || !phoneNumberId) return res.status(500).json({ ok: false, error: 'Voice calling not configured' });
+
+  const callReason = reason || '48-hour follow-up';
+  const qualInfo = qualification || 'their RPL qualification';
+  const firstName = name || 'there';
+
+  const prompt = `You are calling ${firstName} from 3CIR to follow up on their recent enquiry about ${qualInfo}. This is a ${callReason} call.
+
+Your goal is to:
+1. Confirm they received the information they were looking for
+2. Answer any remaining questions about the RPL process
+3. Encourage them to submit their free RPL assessment form if they haven't already
+4. Offer to help with evidence gathering
+
+Be warm, professional, and not pushy. If they're busy, offer to call back at a better time. If they've already submitted their form, congratulate them and let them know Matt will be in touch within 24-48 hours.
+
+Key facts:
+- 3CIR is Australia's leading veteran-owned RPL provider
+- Free RPL assessment — no obligation
+- 225+ five-star reviews
+- Payment plans available: Afterpay, Zip, Klarna, weekly direct debit
+- Evidence checklist will be emailed to them
+- Typical RPL assessment takes 2-4 weeks
+
+DO NOT use the word "mate". Use Australian English. Be professional but warm.`;
+
+  try {
+    const response = await axios.post('https://api.vapi.ai/call/phone', {
+      phoneNumberId: phoneNumberId,
+      customer: { number: phone },
+      assistant: {
+        model: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', messages: [{ role: 'system', content: prompt }] },
+        voice: { provider: '11labs', voiceId: 'cjVigY5qzO86Huf0OWal', model: 'eleven_turbo_v2_5' },
+        firstMessage: `Hi ${firstName}, this is 3CIR calling. I'm just following up on your recent RPL enquiry. Is now a good time for a quick chat?`,
+        transcriber: { provider: 'deepgram' },
+        serverUrl: `https://threecir-ai-assistant.onrender.com/api/voice-callback`,
+      },
+    }, {
+      headers: { Authorization: `Bearer ${vapiKey}`, 'Content-Type': 'application/json' },
+      timeout: 30000,
+    });
+
+    // Log the outbound call to GHL
+    if (contactId) {
+      await ghl.addNote(contactId, `Outbound AI follow-up call triggered (${callReason}). Qualification: ${qualInfo}`).catch(() => {});
+      await ghl.upsertContact({ email: email || '', phone: phone, tags: ['follow-up-call-sent'] }).catch(() => {});
+    }
+
+    console.log(`[Outbound] Call triggered to ${phone} — ${callReason}`);
+    res.json({ ok: true, callId: response.data?.id });
+  } catch (err) {
+    console.error(`[Outbound] Error: ${err.message}`);
+    res.status(500).json({ ok: false, error: 'Failed to initiate call' });
+  }
+});
+
+// ============================================================
 // SHUTDOWN
 // ============================================================
 async function shutdown(sig) {
@@ -1116,7 +1201,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.0');
+  console.log('  3CIR AI ASSISTANT v2.0.1');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
@@ -1133,7 +1218,7 @@ app.listen(PORT, async () => {
   console.log(`  WhatsApp: ${process.env.TWILIO_WHATSAPP_FROM ? 'ON' : 'OFF'}`);
   console.log(`  SEEK:     ${seek.getCacheSize()} qualifications cached`);
   console.log(`  ABS:      ${process.env.ABS_API_KEY ? 'Live API' : 'Baseline data'}`);
-  console.log(`  Evidence: ON`);
+  console.log(`  Evidence: ON (debug logging enabled)`);
   console.log('============================================================');
 
   // Initial SEEK refresh (runs in background, doesn't block startup)
