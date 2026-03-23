@@ -27,7 +27,7 @@ const evidenceScanRouter = require('./routes/evidence-scan');
 // CONFIG
 // ============================================================
 const PORT = process.env.PORT || 3000;
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://www.3cir.com,https://3cir.com').split(',').map(s => s.trim());
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://www.3cir.com,https://3cir.com,https://3cironline.edu.au,https://www.3cironline.edu.au').split(',').map(s => s.trim());
 const MAX_MSG_LENGTH = 2000;
 const MAX_HISTORY = 20;
 const INACTIVITY_MINUTES = 30;
@@ -317,7 +317,8 @@ async function logAnalytics(s, reason) {
 async function handleSessionEnd(s, reason) {
   if (s.contactId && s.messages?.length > 1) {
     const q = (s.qualsDiscussed || []).map(x => x.name).join(', ') || 'None';
-    await ghl.addNote(s.contactId, `AI Chatbot Conversation\nAudience: ${s.audience}\nMessages: ${s.messages.length}\nDuration: ${Math.round((Date.now() - s.created) / 60000)} min\nQuals: ${q}\nEscalated: ${s.escalated ? 'YES' : 'No'}\nCallback: ${s.callbackRequested ? 'YES' : 'No'}\n---\n${buildTranscript(s)}`).catch(() => {});
+    const noteResult = await ghl.addNote(s.contactId, `AI Chatbot — Session Ended (${reason})\nAudience: ${s.audience}\nMessages: ${s.messages.length}\nDuration: ${Math.round((Date.now() - s.created) / 60000)} min\nQualifications Discussed: ${q}\nEscalated: ${s.escalated ? 'YES' : 'No'}\nCallback: ${s.callbackRequested ? 'YES' : 'No'}\n---\nFULL TRANSCRIPT:\n${buildTranscript(s)}`);
+    if (!noteResult.ok) console.error(`[Session End Note] FAILED for ${s.contactId}: ${noteResult.error}`);
   }
   if (!s.emailSent && s.contactId && (s.qualsDiscussed || []).length > 0) {
     await triggerEmailWebhook(s).catch(() => {});
@@ -365,11 +366,40 @@ async function attemptLeadCapture(s) {
     if (n) { fn = n.firstName; ln = n.lastName; break; }
   }
   const tag = s.audience === 'services' ? 'src:AI Chat — Services' : 'src:AI Chat — Public';
-  const r = await ghl.upsertContact({ firstName: fn, lastName: ln, email: email || '', phone: phone || '', source: 'AI Chatbot', tags: [tag, 'chatbot-lead'] });
+  const qualNames = (s.qualsDiscussed || []).map(q => q.name);
+  const qualTags = qualNames.map(q => `qual:${q}`);
+  const r = await ghl.upsertContact({ firstName: fn, lastName: ln, email: email || '', phone: phone || '', source: 'AI Chatbot', tags: [tag, 'chatbot-lead', ...qualTags] });
   if (r.ok) {
     s.contactId = r.contactId; s.firstName = fn; s.email = email || ''; s.phone = phone || '';
-    await ghl.createOpportunity(r.contactId, { title: `AI Chat — ${fn || email || phone || 'Unknown'}`, stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7', source: 'AI Chatbot' });
-    console.log(`[Lead] ${fn || ''} ${email || phone || ''} → ${r.contactId}`);
+
+    // Opportunity title includes qualification interest
+    const qualSummary = qualNames.length > 0 ? qualNames.join(', ') : 'General Enquiry';
+    const oppTitle = `AI Chat — ${fn || email || phone || 'Unknown'} — ${qualSummary}`;
+    await ghl.createOpportunity(r.contactId, { title: oppTitle, stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7', source: 'AI Chatbot' });
+
+    // IMMEDIATE NOTE — so Matt has context when calling back
+    const noteLines = [
+      `AI CHATBOT LEAD — ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}`,
+      `Audience: ${s.audience}`,
+      `Messages so far: ${s.messages.length}`,
+    ];
+    if (qualNames.length > 0) {
+      noteLines.push(`\nQualification Interest:`);
+      for (const q of s.qualsDiscussed) {
+        let price = `RPL $${q.rpl.toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
+        if (q.online) price += ` | Online $${q.online.toLocaleString('en-AU', { minimumFractionDigits: 2 })}`;
+        noteLines.push(`  • ${q.name} (${q.code}) — ${price}`);
+      }
+    } else {
+      noteLines.push(`Qualification Interest: Not yet discussed`);
+    }
+    noteLines.push(`\nConversation so far:`);
+    noteLines.push(buildTranscript(s));
+    const noteResult = await ghl.addNote(r.contactId, noteLines.join('\n'));
+    if (!noteResult.ok) console.error(`[Lead Note] FAILED for ${r.contactId}: ${noteResult.error}`);
+    else console.log(`[Lead Note] Added for ${r.contactId} — ${qualNames.length} quals`);
+
+    console.log(`[Lead] ${fn || ''} ${email || phone || ''} → ${r.contactId} — ${qualSummary}`);
     await triggerSmsWebhook(s).catch(e => console.error(`[P1] ${e.message}`));
   }
 }
@@ -378,14 +408,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.6',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.7',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.6', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.7', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -704,7 +734,7 @@ app.post('/api/lead', async (req, res) => {
       s.contactId = r.contactId; s.firstName = p[0] || ''; s.email = email || ''; s.phone = phone || '';
       sessions.set(sessionId, s);
     }
-    const oppTitle = isVoice ? `AI Voice — ${p[0] || phone || email}` : `AI Chat — ${p[0] || email || phone}`;
+    const oppTitle = isVoice ? `AI Voice — ${p[0] || phone || email} — ${qualInterest || 'General Enquiry'}` : `AI Chat — ${p[0] || email || phone} — ${qualInterest || 'General Enquiry'}`;
     await ghl.createOpportunity(r.contactId, { title: oppTitle, stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7', source: leadSource });
 
     // Add qualification interest and notes if provided (from voice calls)
@@ -1141,10 +1171,10 @@ app.post('/api/voice-callback', async (req, res) => {
           });
           if (r.ok) {
             await ghl.createOpportunity(r.contactId, {
-              title: `AI Voice — ${p[0] || phone || email}`,
+              title: `AI Voice — ${p[0] || phone || email} — ${params.qualInterest || 'General Enquiry'}`,
               stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7',
               source: 'AI Voice Call',
-            }).catch(() => {});
+            }).catch(e => console.error(`[Vapi Opp] FAILED: ${e.message}`));
             console.log(`[Vapi Tool] Lead captured: ${name} ${email || phone} → ${r.contactId}`);
 
             // Trigger callback email for voice leads
@@ -1216,22 +1246,26 @@ app.post('/api/voice-callback', async (req, res) => {
       }).catch(() => ({ ok: false }));
 
       if (r.ok && r.contactId) {
-        // Add transcript as note
+        // Add transcript as note — CRITICAL for Matt's callback context
         const noteText = [
-          `AI Voice Call — ${duration}s`,
-          extractedQual ? `\nQualification Interest: ${extractedQual}` : '',
-          summary ? `\nSummary: ${summary}` : '',
+          `AI VOICE CALL — ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}`,
+          `Duration: ${duration}s`,
+          extractedQual ? `\nQualification Interest: ${extractedQual}` : '\nQualification Interest: Not identified',
+          summary ? `\nCall Summary: ${summary}` : '',
           recordingUrl ? `\nRecording: ${recordingUrl}` : '',
-          transcript ? `\nTranscript:\n${transcript.substring(0, 5000)}` : '',
+          transcript ? `\nFull Transcript:\n${transcript.substring(0, 5000)}` : '\nNo transcript available',
         ].join('');
-        await ghl.addNote(r.contactId, noteText).catch(() => {});
+        const noteResult = await ghl.addNote(r.contactId, noteText);
+        if (!noteResult.ok) console.error(`[Voice Note] FAILED for ${r.contactId}: ${noteResult.error}`);
+        else console.log(`[Voice Note] Added for ${r.contactId} — ${noteText.length} chars`);
 
-        // Create opportunity
+        // Create opportunity with qualification in title
+        const voiceOppTitle = `AI Voice — ${extractedName || phone} — ${extractedQual || 'General Enquiry'}`;
         await ghl.createOpportunity(r.contactId, {
-          title: `AI Voice — ${extractedName || phone}`,
+          title: voiceOppTitle,
           stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7',
           source: 'AI Voice Call',
-        }).catch(() => {});
+        }).catch(e => console.error(`[Voice Opp] FAILED: ${e.message}`));
 
         // Trigger callback email
         if (process.env.CALLBACK_WEBHOOK_URL) {
@@ -1310,7 +1344,7 @@ DO NOT use the word "mate". Use Australian English. Be professional but warm.`;
       customer: { number: phone },
       assistant: {
         model: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', messages: [{ role: 'system', content: prompt }] },
-        voice: { provider: '11labs', voiceId: 'cjVigY5qzO86Huf0OWal', model: 'eleven_turbo_v2_5' },
+        voice: { provider: '11labs', voiceId: 'aGkVQvWUZi16EH8aZJvT', model: 'eleven_turbo_v2_5' },
         firstMessage: `Hi ${firstName}, this is 3CIR calling. I'm just following up on your recent RPL enquiry. Is now a good time for a quick chat?`,
         transcriber: { provider: 'deepgram' },
         serverUrl: `https://threecir-ai-assistant.onrender.com/api/voice-callback`,
@@ -1354,7 +1388,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.6');
+  console.log('  3CIR AI ASSISTANT v2.0.7');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
