@@ -411,14 +411,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.9',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.0',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true, competencyCall: !!process.env.VAPI_API_KEY },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.9', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.0', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -1318,21 +1318,25 @@ Use Australian English spelling (recognised, organisation, defence, colour).`,
             console.error(`[Competency] NO contactId — cannot write notes. Data: ${JSON.stringify(competencyData).substring(0, 200)}`);
           }
 
-          // Notify Matt via callback webhook
-          if (process.env.CALLBACK_WEBHOOK_URL) {
-            axios.post(process.env.CALLBACK_WEBHOOK_URL, {
-              contactId: competencyData.contactId || '',
-              firstName: competencyData.firstName,
-              phone: phone,
-              email: competencyData.email,
-              preferredTime: `Competency Assessment Complete — Score: ${score}%`,
-              audience: 'services',
-              qualsDiscussed: competencyData.qualName,
-              source: 'AI Competency Call — Results Ready',
-              competencyScore: score,
-              competencyReport: competencyReport.substring(0, 2000),
-            }, { timeout: 10000 }).catch(e => console.error(`[Competency Callback] ${e.message}`));
-          }
+          // Notify Matt AND email customer via dedicated competency webhook
+          const competencyWebhookUrl = process.env.COMPETENCY_WEBHOOK_URL || 'https://hook.eu1.make.com/bhgs7cxnmiqvvk4kf2votjxojw5lr8of';
+          axios.post(competencyWebhookUrl, {
+            firstName: competencyData.firstName,
+            lastName: competencyData.lastName || '',
+            email: competencyData.email,
+            phone: phone,
+            qualCode: competencyData.qualCode || '',
+            qualName: competencyData.qualName,
+            competencyScore: score,
+            competencyReport: competencyReport,
+            transcript: transcript.substring(0, 5000),
+            contactId: competencyData.contactId || '',
+            recordingUrl: recordingUrl || '',
+            background: competencyData.background || '',
+            duration: duration,
+          }, { timeout: 15000 }).then(() => {
+            console.log(`[Competency] Webhook sent — both emails will fire`);
+          }).catch(e => console.error(`[Competency Webhook] ${e.message}`));
 
           console.log(`[Competency] Complete for ${competencyData.firstName}: ${score}% for ${competencyData.qualName}`);
 
@@ -1642,7 +1646,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.9');
+  console.log('  3CIR AI ASSISTANT v2.1.0');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
