@@ -411,14 +411,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.2',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.3',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true, competencyCall: !!process.env.VAPI_API_KEY },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.2', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.3', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -1242,93 +1242,96 @@ app.post('/api/voice-callback', async (req, res) => {
         competencyCalls.delete(normPhone);
 
         try {
-          // Generate competency map using Claude — audience-aware
+          // Generate competency map using Claude — audience-aware, PERSONALISED to transcript
           const isOnline = competencyData.audience === 'online';
           const reportPrompt = isOnline
-            ? `You are an expert course advisor analysing a phone call transcript. The caller is interested in studying ${competencyData.qualCode} ${competencyData.qualName} online.
+            ? `You are an expert course advisor analysing a SPECIFIC phone call transcript. The caller is interested in studying ${competencyData.qualCode} ${competencyData.qualName} online.
 
-Generate a course suitability report in this EXACT format (plain text, no markdown):
+CRITICAL: This report MUST be 100% personalised to what THIS person said. Reference their ACTUAL job title, years of experience, responsibilities, career goals, and study preferences. Do NOT use generic template language. Every sentence must reference specific things from the transcript.
+
+Generate a course suitability report in plain text (no markdown):
 
 COURSE SUITABILITY ASSESSMENT
-Candidate: [name]
+Candidate: [their actual name from the call]
 Qualification: ${competencyData.qualCode} ${competencyData.qualName}
 Assessment Date: ${new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' })}
 
-STUDY PATHWAY RECOMMENDATION: [Online Study / RPL / Blended]
+STUDY PATHWAY RECOMMENDATION: [Online Study / RPL / Blended — based on their experience level]
 
 SUITABILITY SCORE: [0-100]%
+Score guide: Under 3yr experience = 40-60%. 3-5yr = 60-75%. 5-10yr = 75-85%. 10+yr with relevant skills = 85-95% and recommend RPL instead.
 
-ASSESSMENT SUMMARY:
-[2-3 sentence summary of their suitability and recommended pathway]
+PERSONALISED ASSESSMENT:
+[3-4 sentences referencing SPECIFIC things they said — their actual role, employer, years, team size, responsibilities. Not generic language.]
 
-KEY STRENGTHS:
-- [strength 1 based on their experience and goals]
-- [strength 2]
-- [strength 3]
+WHY THIS QUALIFICATION SUITS YOU:
+- [specific connection between THEIR stated experience and the qualification]
+- [another specific connection from what they said]
+- [another]
 
-AREAS FOR DEVELOPMENT:
-- [area 1 — topics they will learn during study]
-- [area 2 if applicable]
+AREAS YOU WILL DEVELOP:
+- [specific gap based on what they said they lack experience in]
+- [another if applicable]
 
 RPL ELIGIBILITY CHECK:
-[Based on their experience, could they qualify for RPL instead of or alongside online study? If they have 3+ years relevant experience, recommend checking RPL eligibility as it could be faster and cheaper.]
+[Based on THEIR specific experience. If 3+ years relevant, strongly recommend RPL as faster and cheaper. Reference their background.]
 
 RECOMMENDED STUDY PLAN:
-- Estimated duration: [X months at standard pace / X months accelerated]
-- Units: [approximate number] units
-- Weekly commitment: [X hours based on their availability]
+- Estimated duration: [based on their stated time availability]
+- Weekly commitment: [based on what they said]
 - Platform: Cloud Assess (100% online, self-paced)
 
-RECOMMENDED NEXT STEPS:
-1. Enrol via 3cironline.edu.au
-2. If RPL eligible, submit the free RPL assessment form at 3cir.com for a faster pathway
-3. A course advisor will follow up to discuss your options
+NEXT STEPS:
+1. [Personalised — RPL or online based on their situation]
+2. [Second step]
+3. A course advisor from 3CIR will follow up to discuss your options
 
-IMPORTANT: This is a preliminary assessment based on a brief phone conversation. Individual results may vary. All qualifications are issued through Asset College (RTO 31718).`
-            : `You are an expert RPL (Recognition of Prior Learning) assessor analysing a phone call transcript. The caller is interested in: ${competencyData.qualCode} ${competencyData.qualName}.
+IMPORTANT: This is a preliminary assessment based on a brief phone conversation. A detailed assessment is required for precise eligibility and qualification information. All qualifications are issued through Asset College (RTO 31718).`
+            : `You are an expert RPL assessor analysing a SPECIFIC phone call transcript. The caller is interested in: ${competencyData.qualCode} ${competencyData.qualName}.
 
-Generate a competency assessment report in this EXACT format (plain text, no markdown):
+CRITICAL: This report MUST be 100% personalised to what THIS person said. Reference their ACTUAL job title, years of experience, team size, industry, service branch, responsibilities, and evidence they mentioned. Do NOT use generic template language. If they said "police sergeant with 12 years in QPS" — say exactly that. Every sentence must reference the transcript.
+
+Generate a competency assessment report in plain text (no markdown):
 
 COMPETENCY ASSESSMENT RESULTS
-Candidate: [name]
+Candidate: [their actual name from the call]
 Qualification: ${competencyData.qualCode} ${competencyData.qualName}
 Assessment Date: ${new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' })}
 
-OVERALL RPL READINESS SCORE: [0-100]%
+RPL READINESS SCORE: [0-100]%
+Score guide: Under 3yr = 30-50% (suggest online study). 3-5yr some relevance = 50-70%. 5-8yr directly relevant = 70-85%. 8+yr with leadership = 85-95%. Never give 95%+ — always gaps to address.
 
-ASSESSMENT SUMMARY:
-[2-3 sentence summary of their readiness]
+PERSONALISED ASSESSMENT:
+[3-4 sentences referencing SPECIFIC things they said — their actual role, employer/service branch, years, team size, responsibilities. Example: "As a Sergeant in QPS with 12 years leading a team of 8, your incident management and risk assessment experience directly aligns with this qualification."]
 
-KEY STRENGTHS IDENTIFIED:
-- [strength 1 based on their experience]
-- [strength 2]
-- [strength 3]
+KEY STRENGTHS — BASED ON YOUR EXPERIENCE:
+- [specific strength citing what THEY said]
+- [another from their actual background]
+- [another]
 
-POTENTIAL GAPS:
-- [gap 1 — areas where evidence may be thin]
-- [gap 2 if applicable]
+POTENTIAL GAPS TO ADDRESS:
+- [specific gap based on what they were unsure about or lacked]
+- [another if applicable]
 
 COMPETENCY AREA BREAKDOWN:
-[For each major competency area relevant to the qualification, rate as STRONG / MODERATE / WEAK with a brief explanation]
-- [Area 1]: [STRONG/MODERATE/WEAK] — [brief reason]
-- [Area 2]: [STRONG/MODERATE/WEAK] — [brief reason]
-- [Area 3]: [STRONG/MODERATE/WEAK] — [brief reason]
-- [Area 4]: [STRONG/MODERATE/WEAK] — [brief reason]
+[Rate each area based on THEIR specific answers]
+- [Area]: [STRONG/MODERATE/DEVELOPING] — [reason citing their specific experience]
+- [Area]: [rating] — [reason]
+- [Area]: [rating] — [reason]
+- [Area]: [rating] — [reason]
 
-RECOMMENDED EVIDENCE TO GATHER:
-- [evidence item 1]
-- [evidence item 2]
-- [evidence item 3]
-- [evidence item 4]
+EVIDENCE YOU LIKELY HAVE:
+[Based on what THEY said about their documentation — not a generic list]
+- [specific evidence they mentioned or their role would produce]
+- [another]
+- [another]
 
-RECOMMENDED NEXT STEPS:
+NEXT STEPS:
 1. Submit the free RPL assessment form at 3cir.com for a formal assessment
 2. Gather the evidence listed above
-3. A senior assessor will review your portfolio within 24-48 hours
+3. A senior assessor will personally review your portfolio within 24-48 hours
 
-IMPORTANT: This is a preliminary assessment based on a brief phone conversation. A formal RPL assessment by a qualified assessor is required to confirm eligibility and outcomes. All qualifications are issued through Asset College (RTO 31718).
-
-Use Australian English spelling (recognised, organisation, defence, colour).`;
+IMPORTANT: This is a preliminary assessment based on a brief phone conversation. A formal RPL assessment is required for precise eligibility and qualification information. All qualifications are issued through Asset College (RTO 31718).`;
 
           const competencyAnalysis = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
@@ -1747,7 +1750,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.1.2');
+  console.log('  3CIR AI ASSISTANT v2.1.3');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
