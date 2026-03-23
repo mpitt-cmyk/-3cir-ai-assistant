@@ -52,6 +52,9 @@ sessions.on('expired', async (key, session) => {
 global._3cir_sessionCache = sessions;
 global._3cir_ghl = ghl;
 
+// === COMPETENCY CALLS: Track outbound competency assessment calls ===
+const competencyCalls = new Map(); // phone → { firstName, lastName, email, qualCode, qualName, background, contactId, callId, timestamp }
+
 // ============================================================
 // EXPRESS
 // ============================================================
@@ -408,19 +411,20 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.7',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.8',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
-  features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true },
+  features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true, competencyCall: !!process.env.VAPI_API_KEY },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.7', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.8', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
 app.get('/chat/services', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
 app.get('/chat/public', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-public.html')));
+app.get('/competency-call', (req, res) => res.sendFile(path.join(__dirname, 'public', 'competency-call.html')));
 
 app.post('/api/session', (req, res) => {
   const { referrerUrl } = req.body;
@@ -1212,6 +1216,113 @@ app.post('/api/voice-callback', async (req, res) => {
 
       if (!phone && !transcript) return;
 
+      // === COMPETENCY CALL DETECTION ===
+      const competencyData = competencyCalls.get(phone);
+      if (competencyData && transcript && transcript.length > 100) {
+        console.log(`[Competency] Detected competency call for ${phone} — ${competencyData.qualName}`);
+        competencyCalls.delete(phone);
+
+        try {
+          // Generate competency map using Claude
+          const competencyAnalysis = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 2000,
+            system: `You are an expert RPL (Recognition of Prior Learning) assessor analysing a phone call transcript. The caller is interested in: ${competencyData.qualCode} ${competencyData.qualName}.
+
+Generate a competency assessment report in this EXACT format (plain text, no markdown):
+
+COMPETENCY ASSESSMENT RESULTS
+Candidate: [name]
+Qualification: ${competencyData.qualCode} ${competencyData.qualName}
+Assessment Date: ${new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' })}
+
+OVERALL RPL READINESS SCORE: [0-100]%
+
+ASSESSMENT SUMMARY:
+[2-3 sentence summary of their readiness]
+
+KEY STRENGTHS IDENTIFIED:
+- [strength 1 based on their experience]
+- [strength 2]
+- [strength 3]
+
+POTENTIAL GAPS:
+- [gap 1 — areas where evidence may be thin]
+- [gap 2 if applicable]
+
+COMPETENCY AREA BREAKDOWN:
+[For each major competency area relevant to the qualification, rate as STRONG / MODERATE / WEAK with a brief explanation]
+- [Area 1]: [STRONG/MODERATE/WEAK] — [brief reason]
+- [Area 2]: [STRONG/MODERATE/WEAK] — [brief reason]
+- [Area 3]: [STRONG/MODERATE/WEAK] — [brief reason]
+- [Area 4]: [STRONG/MODERATE/WEAK] — [brief reason]
+
+RECOMMENDED EVIDENCE TO GATHER:
+- [evidence item 1]
+- [evidence item 2]
+- [evidence item 3]
+- [evidence item 4]
+
+RECOMMENDED NEXT STEPS:
+1. Submit the free RPL assessment form at 3cir.com for a formal assessment
+2. Gather the evidence listed above
+3. A senior assessor will review your portfolio within 24-48 hours
+
+IMPORTANT: This is a preliminary AI-generated assessment based on a brief phone conversation. A formal RPL assessment by a qualified assessor is required to confirm eligibility and outcomes. All qualifications are issued through Asset College (RTO 31718).
+
+Use Australian English spelling (recognised, organisation, defence, colour).`,
+            messages: [{ role: 'user', content: `Call transcript:\n\n${transcript.substring(0, 4000)}` }],
+          });
+
+          const competencyReport = competencyAnalysis.content[0]?.text || '';
+          console.log(`[Competency] Report generated: ${competencyReport.length} chars`);
+
+          // Extract the score from the report
+          const scoreMatch = competencyReport.match(/READINESS SCORE:\s*(\d+)/);
+          const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
+
+          // Store full report in GHL as note
+          if (competencyData.contactId) {
+            const noteResult = await ghl.addNote(competencyData.contactId, competencyReport);
+            if (!noteResult.ok) console.error(`[Competency Note] FAILED: ${noteResult.error}`);
+            else console.log(`[Competency Note] Added for ${competencyData.contactId}`);
+
+            // Add score tag
+            await ghl.upsertContact({
+              email: competencyData.email || '',
+              phone: phone,
+              tags: ['competency-assessed', `score:${score}%`],
+            }).catch(() => {});
+
+            // Add transcript as separate note
+            await ghl.addNote(competencyData.contactId, `COMPETENCY CALL TRANSCRIPT\nDuration: ${duration}s\n${recordingUrl ? `Recording: ${recordingUrl}\n` : ''}\n${transcript.substring(0, 5000)}`).catch(() => {});
+          }
+
+          // Notify Matt via callback webhook
+          if (process.env.CALLBACK_WEBHOOK_URL) {
+            axios.post(process.env.CALLBACK_WEBHOOK_URL, {
+              contactId: competencyData.contactId || '',
+              firstName: competencyData.firstName,
+              phone: phone,
+              email: competencyData.email,
+              preferredTime: `Competency Assessment Complete — Score: ${score}%`,
+              audience: 'services',
+              qualsDiscussed: competencyData.qualName,
+              source: 'AI Competency Call — Results Ready',
+              competencyScore: score,
+              competencyReport: competencyReport.substring(0, 2000),
+            }, { timeout: 10000 }).catch(e => console.error(`[Competency Callback] ${e.message}`));
+          }
+
+          console.log(`[Competency] Complete for ${competencyData.firstName}: ${score}% for ${competencyData.qualName}`);
+
+        } catch (compErr) {
+          console.error(`[Competency] Analysis error: ${compErr.message}`);
+          // Fall through to standard processing if competency analysis fails
+        }
+        return;
+      }
+
       // Extract name and email from transcript using Claude
       let extractedName = '';
       let extractedEmail = '';
@@ -1369,6 +1480,118 @@ DO NOT use the word "mate". Use Australian English. Be professional but warm.`;
 });
 
 // ============================================================
+// POST /api/competency-call — Innovation #4: Free AI Competency Assessment
+// Triggers an outbound Vapi call with a competency-focused prompt,
+// then generates a competency map from the transcript and emails results.
+// ============================================================
+app.post('/api/competency-call', async (req, res) => {
+  const { firstName, lastName, phone, email, qualCode, qualName, background } = req.body;
+
+  if (!firstName) return res.status(400).json({ ok: false, error: 'First name is required' });
+  if (!phone) return res.status(400).json({ ok: false, error: 'Phone number is required' });
+  if (!email) return res.status(400).json({ ok: false, error: 'Email is required' });
+  if (!qualName) return res.status(400).json({ ok: false, error: 'Qualification selection is required' });
+
+  const vapiKey = process.env.VAPI_API_KEY;
+  const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;
+  if (!vapiKey || !phoneNumberId) return res.status(500).json({ ok: false, error: 'Voice calling not configured' });
+
+  const normPhone = ghl.normalisePhone(phone);
+  const fullName = [firstName, lastName].filter(Boolean).join(' ');
+  const qualDisplay = qualName || 'a qualification';
+  const bgContext = background ? `Their background: ${background}.` : '';
+
+  // Create GHL contact immediately
+  const contactResult = await ghl.upsertContact({
+    firstName: firstName || '',
+    lastName: lastName || '',
+    email: email,
+    phone: normPhone,
+    source: 'AI Competency Call',
+    tags: ['src:AI Competency Call', 'competency-assessment', `qual:${qualName}`],
+  });
+  const contactId = contactResult.ok ? contactResult.contactId : null;
+
+  if (contactId) {
+    await ghl.createOpportunity(contactId, {
+      title: `Competency Call — ${fullName} — ${qualDisplay}`,
+      stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7',
+      source: 'AI Competency Call',
+    }).catch(e => console.error(`[Competency] Opp failed: ${e.message}`));
+
+    await ghl.addNote(contactId, `COMPETENCY ASSESSMENT REQUESTED\nQualification: ${qualCode} ${qualName}\nBackground: ${background || 'Not provided'}\nEmail: ${email}\nPhone: ${normPhone}\nTimestamp: ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}\n\nAI competency call being triggered now. Results will be added as a note once the call completes.`).catch(() => {});
+  }
+
+  // Build the competency-specific prompt for Vapi
+  const competencyPrompt = `You are Steve, an AI assessor from 3CIR conducting a FREE 5-minute competency assessment call for ${firstName}. They are interested in ${qualDisplay} (code: ${qualCode || 'TBC'}). ${bgContext}
+
+YOUR GOAL: Ask 6-8 targeted questions to assess their RPL (Recognition of Prior Learning) readiness for this qualification. You need to understand their work experience, skills, leadership exposure, and evidence availability.
+
+CRITICAL RULES:
+- Use Australian English. Be warm and professional. Do NOT use the word "mate".
+- Keep the call to 5 minutes maximum. Be efficient but not rushed.
+- Do NOT guarantee outcomes — this is a preliminary assessment only.
+- At the end, tell them their results will be emailed within a few minutes.
+
+QUESTION FLOW — adapt to their answers, skip questions already answered:
+1. ROLE & EXPERIENCE: "Can you tell me about your current or most recent role, and how long you have been in the field?"
+2. RESPONSIBILITIES: "What are the main responsibilities you handle day to day?" (Listen for management, planning, compliance, team leadership, project delivery, risk management, etc.)
+3. LEADERSHIP: "Have you supervised or managed any staff, or led any teams or projects?" (If yes: "How many people, and what did that involve?")
+4. SPECIFIC SKILLS: Ask 1-2 questions specific to their target qualification area. For Leadership — strategic planning, budgets, stakeholder engagement. For WHS — hazard identification, risk assessment, incident investigation. For Project Management — scope, schedules, stakeholder communication. For Security — threat assessment, security planning, personnel vetting. For HR — recruitment, performance management, industrial relations. For Business — operations, governance, financial oversight.
+5. TRAINING: "Have you completed any formal training, courses, or qualifications related to this field?"
+6. EVIDENCE: "What kind of documentation do you have available — things like position descriptions, performance reviews, training certificates, or reference letters?"
+7. TIMELINE: "Is there a particular timeframe you are working to? For example, a career move or a job application?"
+8. WRAP UP: "Thank you ${firstName}, that is everything I need. Based on what you have shared, I will generate your personalised competency assessment and email it to you within the next few minutes. A senior assessor from 3CIR may also follow up to discuss your results. Thanks for your time today."
+
+If they ask about pricing, you can mention:
+- ${qualDisplay} through RPL typically costs between $862 and $2,737 depending on the level
+- 25% discount for military and emergency services personnel
+- Payment plans available through Afterpay, Zip, and weekly direct debit
+- The free RPL assessment form at 3cir.com is the next step after reviewing their competency results
+
+If they want to speak to a human, say you will arrange a callback and confirm their preferred time.
+
+ABOUT 3CIR: Veteran-owned RPL provider, 225+ five-star reviews, qualifications issued through Asset College (RTO 31718). Free RPL assessment, no obligation.`;
+
+  try {
+    const response = await axios.post('https://api.vapi.ai/call/phone', {
+      phoneNumberId: phoneNumberId,
+      customer: { number: normPhone },
+      assistant: {
+        model: {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-20250514',
+          messages: [{ role: 'system', content: competencyPrompt }],
+        },
+        voice: { provider: '11labs', voiceId: 'aGkVQvWUZi16EH8aZJvT', model: 'eleven_turbo_v2_5' },
+        firstMessage: `Hi ${firstName}, this is Steve from 3CIR. Thanks for requesting a free competency assessment. I have about 6 quick questions to understand your background and map your experience to the ${qualDisplay}. It will only take about 5 minutes. Is now a good time?`,
+        transcriber: { provider: 'deepgram' },
+        serverUrl: 'https://threecir-ai-assistant.onrender.com/api/voice-callback',
+      },
+    }, {
+      headers: { Authorization: `Bearer ${vapiKey}`, 'Content-Type': 'application/json' },
+      timeout: 30000,
+    });
+
+    const callId = response.data?.id || '';
+
+    // Track this as a competency call so voice-callback can detect it
+    competencyCalls.set(normPhone, {
+      firstName, lastName, email, qualCode, qualName, background,
+      contactId, callId, timestamp: Date.now(),
+    });
+    // Auto-expire after 30 minutes
+    setTimeout(() => competencyCalls.delete(normPhone), 30 * 60 * 1000);
+
+    console.log(`[Competency] Call triggered to ${normPhone} for ${qualDisplay} — callId: ${callId}`);
+    res.json({ ok: true, callId });
+  } catch (err) {
+    console.error(`[Competency] Error: ${err.response?.data ? JSON.stringify(err.response.data).substring(0, 300) : err.message}`);
+    res.status(500).json({ ok: false, error: 'Failed to initiate call. Please try again or call 1300 517 039.' });
+  }
+});
+
+// ============================================================
 // SHUTDOWN
 // ============================================================
 async function shutdown(sig) {
@@ -1388,7 +1611,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.7');
+  console.log('  3CIR AI ASSISTANT v2.0.8');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
