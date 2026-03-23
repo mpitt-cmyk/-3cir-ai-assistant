@@ -114,7 +114,7 @@ class GHLClient {
       }
 
       // Resolve stage ID: explicit > env var > auto-discover first stage
-      let resolvedStageId = stageId || process.env.GHL_STAGE_NEW_ENQUIRIES;
+      let resolvedStageId = stageId || process.env.GHL_STAGE_NEW_ENQUIRIES || '449fc1c2-9c41-40ff-9c37-a09a289955b7';
       if (!resolvedStageId) {
         // Auto-discover: fetch pipeline stages and use the first one
         if (!this._cachedFirstStageId) {
