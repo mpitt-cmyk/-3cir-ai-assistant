@@ -411,14 +411,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.8',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.9',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true, competencyCall: !!process.env.VAPI_API_KEY },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.8', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.9', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -1217,10 +1217,26 @@ app.post('/api/voice-callback', async (req, res) => {
       if (!phone && !transcript) return;
 
       // === COMPETENCY CALL DETECTION ===
-      const competencyData = competencyCalls.get(phone);
+      // Try multiple phone formats — Vapi may send +61, 61, 0, etc.
+      const normPhone = ghl.normalisePhone(phone);
+      let competencyData = competencyCalls.get(phone) || competencyCalls.get(normPhone);
+      if (!competencyData) {
+        // Try without +
+        const stripped = phone.replace(/^\+/, '');
+        competencyData = competencyCalls.get(stripped) || competencyCalls.get('+' + stripped);
+      }
+      if (!competencyData) {
+        // Try all stored keys against normalised versions
+        for (const [key, val] of competencyCalls.entries()) {
+          if (ghl.normalisePhone(key) === normPhone) { competencyData = val; competencyCalls.delete(key); break; }
+        }
+      }
+      console.log(`[Voice End] Competency lookup: phone=${phone}, norm=${normPhone}, found=${!!competencyData}, mapSize=${competencyCalls.size}${competencyData ? ', qual=' + competencyData.qualName : ''}`);
+
       if (competencyData && transcript && transcript.length > 100) {
         console.log(`[Competency] Detected competency call for ${phone} — ${competencyData.qualName}`);
         competencyCalls.delete(phone);
+        competencyCalls.delete(normPhone);
 
         try {
           // Generate competency map using Claude
@@ -1283,19 +1299,23 @@ Use Australian English spelling (recognised, organisation, defence, colour).`,
 
           // Store full report in GHL as note
           if (competencyData.contactId) {
+            console.log(`[Competency] Writing report note to contact ${competencyData.contactId}...`);
             const noteResult = await ghl.addNote(competencyData.contactId, competencyReport);
-            if (!noteResult.ok) console.error(`[Competency Note] FAILED: ${noteResult.error}`);
-            else console.log(`[Competency Note] Added for ${competencyData.contactId}`);
+            console.log(`[Competency Note] Report result: ${JSON.stringify(noteResult).substring(0, 200)}`);
 
             // Add score tag
             await ghl.upsertContact({
               email: competencyData.email || '',
               phone: phone,
               tags: ['competency-assessed', `score:${score}%`],
-            }).catch(() => {});
+            }).catch(e => console.error(`[Competency Tag] ${e.message}`));
 
             // Add transcript as separate note
-            await ghl.addNote(competencyData.contactId, `COMPETENCY CALL TRANSCRIPT\nDuration: ${duration}s\n${recordingUrl ? `Recording: ${recordingUrl}\n` : ''}\n${transcript.substring(0, 5000)}`).catch(() => {});
+            console.log(`[Competency] Writing transcript note...`);
+            const transcriptNote = await ghl.addNote(competencyData.contactId, `COMPETENCY CALL TRANSCRIPT\nDuration: ${duration}s\n${recordingUrl ? `Recording: ${recordingUrl}\n` : ''}\n${transcript.substring(0, 5000)}`);
+            console.log(`[Competency Note] Transcript result: ${JSON.stringify(transcriptNote).substring(0, 200)}`);
+          } else {
+            console.error(`[Competency] NO contactId — cannot write notes. Data: ${JSON.stringify(competencyData).substring(0, 200)}`);
           }
 
           // Notify Matt via callback webhook
@@ -1349,26 +1369,36 @@ Use Australian English spelling (recognised, organisation, defence, colour).`,
       // Create/update GHL contact
       const contactName = extractedName || 'Voice Caller';
       const p = contactName.split(/\s+/);
-      const r = await ghl.upsertContact({
-        firstName: p[0] || 'Voice', lastName: p.slice(1).join(' ') || 'Caller',
-        email: extractedEmail || '', phone: phone || '',
-        source: 'AI Voice Call',
-        tags: ['src:AI Voice — Services', 'voice-lead'],
-      }).catch(() => ({ ok: false }));
+      console.log(`[Voice End] Upserting contact: name=${contactName}, email=${extractedEmail}, phone=${phone}`);
+      let r;
+      try {
+        r = await ghl.upsertContact({
+          firstName: p[0] || 'Voice', lastName: p.slice(1).join(' ') || 'Caller',
+          email: extractedEmail || '', phone: phone || '',
+          source: 'AI Voice Call',
+          tags: ['src:AI Voice — Services', 'voice-lead'],
+        });
+      } catch (upsertErr) {
+        console.error(`[Voice End] upsertContact CRASHED: ${upsertErr.message}`);
+        r = { ok: false, error: upsertErr.message };
+      }
+
+      console.log(`[Voice End] upsertContact result: ok=${r.ok}, contactId=${r.contactId || 'NONE'}, error=${r.error || 'none'}`);
 
       if (r.ok && r.contactId) {
         // Add transcript as note — CRITICAL for Matt's callback context
         const noteText = [
-          `AI VOICE CALL — ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}`,
+          `VOICE CALL — ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}`,
           `Duration: ${duration}s`,
           extractedQual ? `\nQualification Interest: ${extractedQual}` : '\nQualification Interest: Not identified',
           summary ? `\nCall Summary: ${summary}` : '',
           recordingUrl ? `\nRecording: ${recordingUrl}` : '',
           transcript ? `\nFull Transcript:\n${transcript.substring(0, 5000)}` : '\nNo transcript available',
         ].join('');
+        console.log(`[Voice End] Adding note to ${r.contactId}: ${noteText.length} chars`);
         const noteResult = await ghl.addNote(r.contactId, noteText);
-        if (!noteResult.ok) console.error(`[Voice Note] FAILED for ${r.contactId}: ${noteResult.error}`);
-        else console.log(`[Voice Note] Added for ${r.contactId} — ${noteText.length} chars`);
+        if (!noteResult.ok) console.error(`[Voice Note] FAILED for ${r.contactId}: ${JSON.stringify(noteResult)}`);
+        else console.log(`[Voice Note] SUCCESS for ${r.contactId}`);
 
         // Create opportunity with qualification in title
         const voiceOppTitle = `AI Voice — ${extractedName || phone} — ${extractedQual || 'General Enquiry'}`;
@@ -1580,6 +1610,7 @@ ABOUT 3CIR: Veteran-owned RPL provider, 225+ five-star reviews, qualifications i
       firstName, lastName, email, qualCode, qualName, background,
       contactId, callId, timestamp: Date.now(),
     });
+    console.log(`[Competency] Stored in map: key="${normPhone}", contactId=${contactId}, qual=${qualName}, mapSize=${competencyCalls.size}`);
     // Auto-expire after 30 minutes
     setTimeout(() => competencyCalls.delete(normPhone), 30 * 60 * 1000);
 
@@ -1611,7 +1642,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.8');
+  console.log('  3CIR AI ASSISTANT v2.0.9');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
