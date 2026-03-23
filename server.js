@@ -111,17 +111,24 @@ function sanitise(text) {
 }
 
 function extractName(text, prev) {
+  const NOT_NAMES = /^(interested|looking|wondering|thinking|hoping|wanting|trying|calling|enquiring|inquiring|asking|writing|emailing|texting|contacting|reaching|seeking|needing|currently|also|just|really|very|quite|here|sure|happy|glad|good|fine|well|ok|okay|ready|available|eligible|keen|after|about|based|located|from|in|at|an|a|the|not|so|now)$/i;
   const patterns = [
-    /(?:my name is|i'm|i am|call me|it's|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    /(?:my name is|call me|it's|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    /(?:i'm|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
     /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+here/i,
   ];
   for (const p of patterns) {
     const m = text.match(p);
-    if (m) return parseName(m[1]);
+    if (m) {
+      const candidate = m[1].trim();
+      const firstWord = candidate.split(/\s+/)[0];
+      if (NOT_NAMES.test(firstWord)) continue; // Skip common words mistaken for names
+      return parseName(candidate);
+    }
   }
   if (prev && text.split(/\s+/).length <= 6) {
     const m = text.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
-    if (m) return parseName(m[1]);
+    if (m && !NOT_NAMES.test(m[1].split(/\s+/)[0])) return parseName(m[1]);
   }
   return null;
 }
@@ -420,14 +427,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.4',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.5',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true, competencyCall: !!process.env.VAPI_API_KEY },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.4', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.5', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -1759,7 +1766,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.1.4');
+  console.log('  3CIR AI ASSISTANT v2.1.5');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
