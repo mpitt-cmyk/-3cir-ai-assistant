@@ -135,6 +135,7 @@ class GHLClient {
       const r = await this._request('POST', `/pipelines/${pipelineId}/opportunities`, {
         title: title || 'AI Chatbot Lead',
         status: 'open',
+        stageId: resolvedStageId,
         pipelineId: pipelineId,
         pipelineStageId: resolvedStageId,
         locationId: process.env.GHL_LOCATION_ID,
