@@ -104,7 +104,7 @@ class GHLClient {
   }
 
   // FIX: GHL v1 requires pipeline ID in URL path, not just in body
-  // Correct endpoint: POST /pipelines/{pipelineId}/opportunities
+  // Auto-discovers first stage if GHL_STAGE_NEW_ENQUIRIES not set
   async createOpportunity(contactId, { title, stageId, monetaryValue, source }) {
     try {
       const pipelineId = process.env.GHL_PIPELINE_ID;
@@ -113,11 +113,30 @@ class GHLClient {
         return { ok: false, error: 'Pipeline ID not configured' };
       }
 
+      // Resolve stage ID: explicit > env var > auto-discover first stage
+      let resolvedStageId = stageId || process.env.GHL_STAGE_NEW_ENQUIRIES;
+      if (!resolvedStageId) {
+        // Auto-discover: fetch pipeline stages and use the first one
+        if (!this._cachedFirstStageId) {
+          const pipeline = await this._request('GET', `/pipelines/${pipelineId}`);
+          if (pipeline.ok && pipeline.data?.stages?.length > 0) {
+            this._cachedFirstStageId = pipeline.data.stages[0].id;
+            console.log(`[GHL] Auto-discovered first stage: ${pipeline.data.stages[0].name} (${this._cachedFirstStageId})`);
+          }
+        }
+        resolvedStageId = this._cachedFirstStageId;
+      }
+
+      if (!resolvedStageId) {
+        console.error('[GHL] Cannot create opportunity — no stage ID available');
+        return { ok: false, error: 'No stage ID available' };
+      }
+
       const r = await this._request('POST', `/pipelines/${pipelineId}/opportunities`, {
         title: title || 'AI Chatbot Lead',
         status: 'open',
         pipelineId: pipelineId,
-        pipelineStageId: stageId || process.env.GHL_STAGE_NEW_ENQUIRIES,
+        pipelineStageId: resolvedStageId,
         locationId: process.env.GHL_LOCATION_ID,
         contactId,
         monetaryValue: monetaryValue || 0,
@@ -133,7 +152,7 @@ class GHLClient {
   }
 
   async addNote(contactId, body) {
-    return this._request('POST', `/contacts/${contactId}/notes`, { body, userId: process.env.GHL_LOCATION_ID });
+    return this._request('POST', `/contacts/${contactId}/notes`, { body });
   }
 
   async addTags(contactId, tags) {
