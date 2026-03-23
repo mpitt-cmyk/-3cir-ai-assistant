@@ -368,7 +368,7 @@ async function attemptLeadCapture(s) {
   const r = await ghl.upsertContact({ firstName: fn, lastName: ln, email: email || '', phone: phone || '', source: 'AI Chatbot', tags: [tag, 'chatbot-lead'] });
   if (r.ok) {
     s.contactId = r.contactId; s.firstName = fn; s.email = email || ''; s.phone = phone || '';
-    await ghl.createOpportunity(r.contactId, { title: `AI Chat — ${fn || email || phone || 'Unknown'}`, stageId: process.env.GHL_STAGE_NEW_ENQUIRIES, source: 'AI Chatbot' });
+    await ghl.createOpportunity(r.contactId, { title: `AI Chat — ${fn || email || phone || 'Unknown'}`, stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7', source: 'AI Chatbot' });
     console.log(`[Lead] ${fn || ''} ${email || phone || ''} → ${r.contactId}`);
     await triggerSmsWebhook(s).catch(e => console.error(`[P1] ${e.message}`));
   }
@@ -378,14 +378,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.5',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.0.6',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.5', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.0.6', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -705,7 +705,7 @@ app.post('/api/lead', async (req, res) => {
       sessions.set(sessionId, s);
     }
     const oppTitle = isVoice ? `AI Voice — ${p[0] || phone || email}` : `AI Chat — ${p[0] || email || phone}`;
-    await ghl.createOpportunity(r.contactId, { title: oppTitle, stageId: process.env.GHL_STAGE_NEW_ENQUIRIES, source: leadSource });
+    await ghl.createOpportunity(r.contactId, { title: oppTitle, stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7', source: leadSource });
 
     // Add qualification interest and notes if provided (from voice calls)
     if (qualInterest || notes) {
@@ -1142,7 +1142,7 @@ app.post('/api/voice-callback', async (req, res) => {
           if (r.ok) {
             await ghl.createOpportunity(r.contactId, {
               title: `AI Voice — ${p[0] || phone || email}`,
-              stageId: process.env.GHL_STAGE_NEW_ENQUIRIES,
+              stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7',
               source: 'AI Voice Call',
             }).catch(() => {});
             console.log(`[Vapi Tool] Lead captured: ${name} ${email || phone} → ${r.contactId}`);
@@ -1229,7 +1229,7 @@ app.post('/api/voice-callback', async (req, res) => {
         // Create opportunity
         await ghl.createOpportunity(r.contactId, {
           title: `AI Voice — ${extractedName || phone}`,
-          stageId: process.env.GHL_STAGE_NEW_ENQUIRIES,
+          stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7',
           source: 'AI Voice Call',
         }).catch(() => {});
 
@@ -1354,7 +1354,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.0.5');
+  console.log('  3CIR AI ASSISTANT v2.0.6');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
