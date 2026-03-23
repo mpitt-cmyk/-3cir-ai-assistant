@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Free Competency Assessment — Military & Emergency Services — 3CIR</title>
-  <meta name="description" content="Get a free 5-minute phone assessment that maps your military or emergency services experience to nationally recognised qualifications.">
+  <title>Free Competency Assessment — 3CIR</title>
+  <meta name="description" content="Get a free 5-minute phone assessment that maps your work experience to nationally recognised qualifications. Results emailed to you.">
   <link rel="icon" type="image/jpeg" href="/public/512x512.jpg">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
-      --primary: #F5A800;
-      --primary-light: #FFD54F;
-      --primary-grad: #E09500;
+      --primary: #1b8466;
+      --primary-light: #2aa87e;
+      --primary-grad: #15704f;
       --dark: #1A1A1A;
       --dark-soft: #2A2A2A;
       --bg: #0F0F0F;
@@ -84,7 +84,7 @@
   <div class="hero">
     <div class="hero-badge">100% Free · No Obligation</div>
     <h1>Get Your Free <span>Competency Assessment</span> in 5 Minutes</h1>
-    <p>We call you, ask a few questions about your military or emergency services experience, and map your skills to nationally recognised qualifications. Results emailed to you.</p>
+    <p>We call you, ask a few questions about your work experience, and map your skills to nationally recognised qualifications. Results emailed to you.</p>
   </div>
   <div class="steps">
     <div class="step"><div class="step-num">1</div><div class="step-title">Enter Your Details</div><div class="step-desc">Name, phone, and qualification interest</div></div>
@@ -108,12 +108,11 @@
         <option value="BSB40120|Certificate IV in Business">Certificate IV in Business</option>
         <option value="BSB40920|Certificate IV in Project Management Practice">Certificate IV in Project Management Practice</option>
         <option value="BSB41419|Certificate IV in Work Health and Safety">Certificate IV in Work Health and Safety</option>
-        <option value="BSB40420|Certificate IV in Human Resources">Certificate IV in Human Resources</option>
+        <option value="BSB40420|Certificate IV in Human Resource Management">Certificate IV in Human Resource Management</option>
+        <option value="BSB40820|Certificate IV in Marketing and Communication">Certificate IV in Marketing and Communication</option>
         <option value="22603VIC|Certificate IV in Cyber Security">Certificate IV in Cyber Security</option>
         <option value="CPP40719|Certificate IV in Security Management">Certificate IV in Security Management</option>
         <option value="PSP40316|Certificate IV in Government Security">Certificate IV in Government Security</option>
-        <option value="PSP40416|Certificate IV in Government Investigations">Certificate IV in Government Investigations</option>
-        <option value="CSC40122|Certificate IV in Correctional Practice">Certificate IV in Correctional Practice</option>
       </optgroup>
       <optgroup label="Diploma">
         <option value="BSB50420|Diploma of Leadership and Management">Diploma of Leadership and Management</option>
@@ -122,7 +121,6 @@
         <option value="BSB51319|Diploma of Work Health and Safety">Diploma of Work Health and Safety</option>
         <option value="BSB50320|Diploma of Human Resources Management">Diploma of Human Resources Management</option>
         <option value="CPP50619|Diploma of Security Risk Management">Diploma of Security Risk Management</option>
-        <option value="PSP50316|Diploma of Government Security">Diploma of Government Security</option>
       </optgroup>
       <optgroup label="Advanced Diploma">
         <option value="BSB60420|Advanced Diploma of Leadership and Management">Advanced Diploma of Leadership and Management</option>
@@ -164,7 +162,7 @@
   <div class="footer">&copy; 2026 3CIR Pty Ltd (ABN 34 614 174 702). Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).</div>
   <script>
     const API_BASE = window.location.origin;
-    const AUDIENCE = 'services';
+    const AUDIENCE = 'public';
     function showError(msg) { const el = document.getElementById('errorMsg'); el.textContent = msg; el.classList.add('visible'); setTimeout(() => el.classList.remove('visible'), 6000); }
     function normalisePhone(p) { p = p.replace(/[\s\-()]/g, ''); if (p.startsWith('0')) p = '+61' + p.substring(1); else if (p.startsWith('61') && !p.startsWith('+')) p = '+' + p; else if (!p.startsWith('+')) p = '+61' + p; return p; }
     async function requestCall() {

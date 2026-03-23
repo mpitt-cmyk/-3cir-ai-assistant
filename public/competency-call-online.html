@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Free Competency Assessment — Military & Emergency Services — 3CIR</title>
-  <meta name="description" content="Get a free 5-minute phone assessment that maps your military or emergency services experience to nationally recognised qualifications.">
+  <title>Free Course Suitability Assessment — 3CIR Online</title>
+  <meta name="description" content="Get a free 5-minute phone assessment to find the right online qualification for your career goals. Results emailed to you.">
   <link rel="icon" type="image/jpeg" href="/public/512x512.jpg">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
-      --primary: #F5A800;
-      --primary-light: #FFD54F;
-      --primary-grad: #E09500;
+      --primary: #1565C0;
+      --primary-light: #42A5F5;
+      --primary-grad: #0D47A1;
       --dark: #1A1A1A;
       --dark-soft: #2A2A2A;
       --bg: #0F0F0F;
       --text: #E8E8E8;
       --text-muted: #999;
-      --success: #1b8466;
+      --success: #1565C0;
       --radius: 12px;
     }
     html { scroll-behavior: smooth; }
@@ -83,13 +83,13 @@
   </div>
   <div class="hero">
     <div class="hero-badge">100% Free · No Obligation</div>
-    <h1>Get Your Free <span>Competency Assessment</span> in 5 Minutes</h1>
-    <p>We call you, ask a few questions about your military or emergency services experience, and map your skills to nationally recognised qualifications. Results emailed to you.</p>
+    <h1>Find Your Perfect <span>Online Qualification</span> in 5 Minutes</h1>
+    <p>We call you, ask a few questions about your career goals and experience, and recommend the best online study pathway. Results emailed to you.</p>
   </div>
   <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-title">Enter Your Details</div><div class="step-desc">Name, phone, and qualification interest</div></div>
+    <div class="step"><div class="step-num">1</div><div class="step-title">Enter Your Details</div><div class="step-desc">Name, phone, and course interest</div></div>
     <div class="step"><div class="step-num">2</div><div class="step-title">Receive the Call</div><div class="step-desc">We call you within 30 seconds</div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-title">Get Your Results</div><div class="step-desc">Competency map emailed instantly</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-title">Get Your Plan</div><div class="step-desc">Study plan emailed instantly</div></div>
   </div>
   <div class="form-section">
     <div class="form-card">
@@ -101,19 +101,20 @@
           <div class="field"><label for="lastName">Last Name</label><input type="text" id="lastName" placeholder="e.g. Thompson" autocomplete="family-name"></div>
         </div>
         <div class="field"><label for="phone">Mobile Number *</label><input type="tel" id="phone" placeholder="04XX XXX XXX" required autocomplete="tel"><div class="field-hint">Australian mobile number — we'll call this number</div></div>
-        <div class="field"><label for="email">Email *</label><input type="email" id="email" placeholder="your@email.com" required autocomplete="email"><div class="field-hint">We'll email your assessment results here</div></div>
-        <div class="field"><label for="qualification">Qualification Interest *</label><select id="qualification" required><option value="">Select a qualification...</option>
+        <div class="field"><label for="email">Email *</label><input type="email" id="email" placeholder="your@email.com" required autocomplete="email"><div class="field-hint">We'll email your study plan here</div></div>
+        <div class="field"><label for="qualification">Course Interest *</label><select id="qualification" required><option value="">Select a course...</option>
+      <optgroup label="Certificate III">
+        <option value="BSB30120|Certificate III in Business">Certificate III in Business</option>
+        <option value="BSB30719|Certificate III in Work Health and Safety">Certificate III in Work Health and Safety</option>
+      </optgroup>
       <optgroup label="Certificate IV">
         <option value="BSB40520|Certificate IV in Leadership and Management">Certificate IV in Leadership and Management</option>
         <option value="BSB40120|Certificate IV in Business">Certificate IV in Business</option>
         <option value="BSB40920|Certificate IV in Project Management Practice">Certificate IV in Project Management Practice</option>
         <option value="BSB41419|Certificate IV in Work Health and Safety">Certificate IV in Work Health and Safety</option>
-        <option value="BSB40420|Certificate IV in Human Resources">Certificate IV in Human Resources</option>
+        <option value="BSB40420|Certificate IV in Human Resource Management">Certificate IV in Human Resource Management</option>
+        <option value="BSB40820|Certificate IV in Marketing and Communication">Certificate IV in Marketing and Communication</option>
         <option value="22603VIC|Certificate IV in Cyber Security">Certificate IV in Cyber Security</option>
-        <option value="CPP40719|Certificate IV in Security Management">Certificate IV in Security Management</option>
-        <option value="PSP40316|Certificate IV in Government Security">Certificate IV in Government Security</option>
-        <option value="PSP40416|Certificate IV in Government Investigations">Certificate IV in Government Investigations</option>
-        <option value="CSC40122|Certificate IV in Correctional Practice">Certificate IV in Correctional Practice</option>
       </optgroup>
       <optgroup label="Diploma">
         <option value="BSB50420|Diploma of Leadership and Management">Diploma of Leadership and Management</option>
@@ -121,22 +122,15 @@
         <option value="BSB50820|Diploma of Project Management">Diploma of Project Management</option>
         <option value="BSB51319|Diploma of Work Health and Safety">Diploma of Work Health and Safety</option>
         <option value="BSB50320|Diploma of Human Resources Management">Diploma of Human Resources Management</option>
-        <option value="CPP50619|Diploma of Security Risk Management">Diploma of Security Risk Management</option>
-        <option value="PSP50316|Diploma of Government Security">Diploma of Government Security</option>
       </optgroup>
       <optgroup label="Advanced Diploma">
         <option value="BSB60420|Advanced Diploma of Leadership and Management">Advanced Diploma of Leadership and Management</option>
         <option value="BSB60120|Advanced Diploma of Business">Advanced Diploma of Business</option>
-      </optgroup>
-      <optgroup label="Graduate Diploma">
-        <option value="BSB80320|Graduate Diploma of Strategic Leadership">Graduate Diploma of Strategic Leadership</option>
-        <option value="BSB80120|Graduate Diploma of Management (Learning)">Graduate Diploma of Management (Learning)</option>
-        <option value="BSB80220|Graduate Diploma of Portfolio Management">Graduate Diploma of Portfolio Management</option>
       </optgroup><option value="unsure|Not sure — help me choose">Not sure — help me choose</option></select></div>
         <div class="field">
-          <label for="background">Brief Background</label>
-          <input type="text" id="background" placeholder="e.g. 10 years Army, Sergeant, logistics">
-          <div class="field-hint">Optional — helps us tailor the questions to you</div>
+          <label for="background">What are your career goals?</label>
+          <input type="text" id="background" placeholder="e.g. Want to move into management, looking for a promotion">
+          <div class="field-hint">Optional — helps us tailor the study recommendations to you</div>
         </div>
         <button class="submit-btn" id="submitBtn" onclick="requestCall()">Call Me Now — Free Assessment</button>
         <div class="error-msg" id="errorMsg"></div>
@@ -145,26 +139,26 @@
       <div class="state-calling" id="stateCalling">
         <div class="calling-anim"><svg viewBox="0 0 24 24"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 01.99-.27c1.12.37 2.33.57 3.6.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.27.2 2.48.57 3.6a1 1 0 01-.27.99l-2.18 2.2z"/></svg></div>
         <h3>Calling you now...</h3>
-        <p>Answer your phone — our assessor Steve will ask you a few questions about your experience.</p>
+        <p>Answer your phone — our course advisor Steve will ask you a few questions about your career goals.</p>
         <p style="margin-top:16px;font-size:13px;color:#666;">The call typically takes 3-5 minutes.</p>
       </div>
       <div class="state-success" id="stateSuccess">
         <div class="success-icon"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></div>
         <h3>Call Triggered Successfully</h3>
         <p>You should receive a call within 30 seconds.</p>
-        <p>After the call, your personalised competency assessment will be emailed to <strong id="confirmEmail"></strong>.</p>
+        <p>After the call, your personalised study plan will be emailed to <strong id="confirmEmail"></strong>.</p>
         <p style="margin-top:20px;font-size:13px;color:#666;">Didn't receive the call? Check your phone isn't on silent, or <a href="tel:1300517039" style="color:var(--primary);">call us on 1300 517 039</a>.</p>
       </div>
     </div>
   </div>
-  <div class="trust"><div class="trust-items"><div class="trust-item"><strong>225+</strong> Five-Star Reviews</div>
-       <div class="trust-item"><strong>Veteran</strong> Owned</div>
+  <div class="trust"><div class="trust-items"><div class="trust-item"><strong>100%</strong> Online</div>
+       <div class="trust-item"><strong>Self-Paced</strong> Learning</div>
        <div class="trust-item"><strong>Free</strong> No Obligation</div>
        <div class="trust-item"><strong>5 Min</strong> Assessment</div></div></div>
   <div class="footer">&copy; 2026 3CIR Pty Ltd (ABN 34 614 174 702). Training and assessment delivered under a third-party arrangement with Asset College (RTO 31718).</div>
   <script>
     const API_BASE = window.location.origin;
-    const AUDIENCE = 'services';
+    const AUDIENCE = 'online';
     function showError(msg) { const el = document.getElementById('errorMsg'); el.textContent = msg; el.classList.add('visible'); setTimeout(() => el.classList.remove('visible'), 6000); }
     function normalisePhone(p) { p = p.replace(/[\s\-()]/g, ''); if (p.startsWith('0')) p = '+61' + p.substring(1); else if (p.startsWith('61') && !p.startsWith('+')) p = '+' + p; else if (!p.startsWith('+')) p = '+61' + p; return p; }
     async function requestCall() {
@@ -177,7 +171,7 @@
       if (!firstName) return showError('Please enter your first name.');
       if (!phone) return showError('Please enter your mobile number.');
       if (!email) return showError('Please enter your email address.');
-      if (!qualValue) return showError('Please select a qualification.');
+      if (!qualValue) return showError('Please select a course.');
       const normPhone = normalisePhone(phone);
       if (!/^\+61[2-578]\d{8}$/.test(normPhone)) return showError('Please enter a valid Australian mobile number.');
       if (!/^[\w.+-]+@[\w.-]+\.\w{2,}$/.test(email)) return showError('Please enter a valid email address.');
