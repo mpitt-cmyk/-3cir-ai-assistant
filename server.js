@@ -282,6 +282,7 @@ async function triggerEmailWebhook(s) {
       source: 'AI Chatbot',
     }, { timeout: 10000 });
     s.emailSent = true;
+    sessions.set(s.id, s); // Persist emailSent flag
     console.log(`[P2] Email sent for ${s.contactId} — ${q.length} quals, ${(s.uploadedFiles || []).length} files`);
   } catch (e) { console.error(`[P2] ${e.message}`); }
 }
@@ -292,6 +293,7 @@ async function triggerEscalationWebhook(s, reasons) {
   try {
     await axios.post(u, { contactId: s.contactId || null, firstName: s.firstName || '', email: s.email || '', phone: s.phone || '', audience: s.audience, reasons, qualsDiscussed: (s.qualsDiscussed || []).map(q => q.name), messageCount: s.messages.length, sessionId: s.id, source: 'AI Chatbot — HIGH VALUE' }, { timeout: 10000 });
     s.escalated = true;
+    sessions.set(s.id, s); // Persist escalated flag
     console.log(`[P9] Escalation: ${reasons.join(', ')}`);
   } catch (e) { console.error(`[P9] ${e.message}`); }
 }
@@ -302,6 +304,7 @@ async function triggerCallbackWebhook(s, time) {
   try {
     await axios.post(u, { contactId: s.contactId, firstName: s.firstName || '', phone: s.phone || '', email: s.email || '', preferredTime: time || 'Not specified', audience: s.audience, qualsDiscussed: (s.qualsDiscussed || []).map(q => q.name), source: 'AI Chatbot — Callback' }, { timeout: 10000 });
     s.callbackRequested = true;
+    sessions.set(s.id, s); // Persist callback flag
     console.log(`[Callback] Triggered for ${s.contactId}`);
   } catch (e) { console.error(`[Callback] ${e.message}`); }
 }
@@ -374,6 +377,8 @@ async function attemptLeadCapture(s) {
   const r = await ghl.upsertContact({ firstName: fn, lastName: ln, email: email || '', phone: phone || '', source: 'AI Chatbot', tags: [tag, 'chatbot-lead', ...qualTags] });
   if (r.ok) {
     s.contactId = r.contactId; s.firstName = fn; s.email = email || ''; s.phone = phone || '';
+    s.smsSent = false; // Will be set true after first SMS
+    sessions.set(s.id, s); // CRITICAL: persist contactId to cache immediately
 
     // Opportunity title includes qualification interest
     const qualSummary = qualNames.length > 0 ? qualNames.join(', ') : 'General Enquiry';
@@ -403,7 +408,11 @@ async function attemptLeadCapture(s) {
     else console.log(`[Lead Note] Added for ${r.contactId} — ${qualNames.length} quals`);
 
     console.log(`[Lead] ${fn || ''} ${email || phone || ''} → ${r.contactId} — ${qualSummary}`);
-    await triggerSmsWebhook(s).catch(e => console.error(`[P1] ${e.message}`));
+    if (!s.smsSent) {
+      await triggerSmsWebhook(s).catch(e => console.error(`[P1] ${e.message}`));
+      s.smsSent = true;
+      sessions.set(s.id, s);
+    }
   }
 }
 
@@ -411,14 +420,14 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.3',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.4',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true, competencyCall: !!process.env.VAPI_API_KEY },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.3', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.4', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -1750,7 +1759,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.1.3');
+  console.log('  3CIR AI ASSISTANT v2.1.4');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
