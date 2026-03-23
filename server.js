@@ -1268,7 +1268,7 @@ RECOMMENDED NEXT STEPS:
 2. Gather the evidence listed above
 3. A senior assessor will review your portfolio within 24-48 hours
 
-IMPORTANT: This is a preliminary AI-generated assessment based on a brief phone conversation. A formal RPL assessment by a qualified assessor is required to confirm eligibility and outcomes. All qualifications are issued through Asset College (RTO 31718).
+IMPORTANT: This is a preliminary assessment based on a brief phone conversation. A formal RPL assessment by a qualified assessor is required to confirm eligibility and outcomes. All qualifications are issued through Asset College (RTO 31718).
 
 Use Australian English spelling (recognised, organisation, defence, colour).`,
             messages: [{ role: 'user', content: `Call transcript:\n\n${transcript.substring(0, 4000)}` }],
@@ -1523,7 +1523,7 @@ app.post('/api/competency-call', async (req, res) => {
   }
 
   // Build the competency-specific prompt for Vapi
-  const competencyPrompt = `You are Steve, an AI assessor from 3CIR conducting a FREE 5-minute competency assessment call for ${firstName}. They are interested in ${qualDisplay} (code: ${qualCode || 'TBC'}). ${bgContext}
+  const competencyPrompt = `You are Steve, a senior assessor from 3CIR conducting a FREE 5-minute competency assessment call for ${firstName}. They are interested in ${qualDisplay} (code: ${qualCode || 'TBC'}). ${bgContext}
 
 YOUR GOAL: Ask 6-8 targeted questions to assess their RPL (Recognition of Prior Learning) readiness for this qualification. You need to understand their work experience, skills, leadership exposure, and evidence availability.
 
