@@ -411,20 +411,23 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.0',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.2',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
   abs: { live: abs.isLive() },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true, competencyCall: !!process.env.VAPI_API_KEY },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.0', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.2', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
 app.get('/chat/services', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
 app.get('/chat/public', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-public.html')));
 app.get('/competency-call', (req, res) => res.sendFile(path.join(__dirname, 'public', 'competency-call.html')));
+app.get('/competency-call/services', (req, res) => res.sendFile(path.join(__dirname, 'public', 'competency-call.html')));
+app.get('/competency-call/public', (req, res) => res.sendFile(path.join(__dirname, 'public', 'competency-call-public.html')));
+app.get('/competency-call/online', (req, res) => res.sendFile(path.join(__dirname, 'public', 'competency-call-online.html')));
 
 app.post('/api/session', (req, res) => {
   const { referrerUrl } = req.body;
@@ -1239,11 +1242,50 @@ app.post('/api/voice-callback', async (req, res) => {
         competencyCalls.delete(normPhone);
 
         try {
-          // Generate competency map using Claude
-          const competencyAnalysis = await anthropic.messages.create({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 2000,
-            system: `You are an expert RPL (Recognition of Prior Learning) assessor analysing a phone call transcript. The caller is interested in: ${competencyData.qualCode} ${competencyData.qualName}.
+          // Generate competency map using Claude — audience-aware
+          const isOnline = competencyData.audience === 'online';
+          const reportPrompt = isOnline
+            ? `You are an expert course advisor analysing a phone call transcript. The caller is interested in studying ${competencyData.qualCode} ${competencyData.qualName} online.
+
+Generate a course suitability report in this EXACT format (plain text, no markdown):
+
+COURSE SUITABILITY ASSESSMENT
+Candidate: [name]
+Qualification: ${competencyData.qualCode} ${competencyData.qualName}
+Assessment Date: ${new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' })}
+
+STUDY PATHWAY RECOMMENDATION: [Online Study / RPL / Blended]
+
+SUITABILITY SCORE: [0-100]%
+
+ASSESSMENT SUMMARY:
+[2-3 sentence summary of their suitability and recommended pathway]
+
+KEY STRENGTHS:
+- [strength 1 based on their experience and goals]
+- [strength 2]
+- [strength 3]
+
+AREAS FOR DEVELOPMENT:
+- [area 1 — topics they will learn during study]
+- [area 2 if applicable]
+
+RPL ELIGIBILITY CHECK:
+[Based on their experience, could they qualify for RPL instead of or alongside online study? If they have 3+ years relevant experience, recommend checking RPL eligibility as it could be faster and cheaper.]
+
+RECOMMENDED STUDY PLAN:
+- Estimated duration: [X months at standard pace / X months accelerated]
+- Units: [approximate number] units
+- Weekly commitment: [X hours based on their availability]
+- Platform: Cloud Assess (100% online, self-paced)
+
+RECOMMENDED NEXT STEPS:
+1. Enrol via 3cironline.edu.au
+2. If RPL eligible, submit the free RPL assessment form at 3cir.com for a faster pathway
+3. A course advisor will follow up to discuss your options
+
+IMPORTANT: This is a preliminary assessment based on a brief phone conversation. Individual results may vary. All qualifications are issued through Asset College (RTO 31718).`
+            : `You are an expert RPL (Recognition of Prior Learning) assessor analysing a phone call transcript. The caller is interested in: ${competencyData.qualCode} ${competencyData.qualName}.
 
 Generate a competency assessment report in this EXACT format (plain text, no markdown):
 
@@ -1286,15 +1328,20 @@ RECOMMENDED NEXT STEPS:
 
 IMPORTANT: This is a preliminary assessment based on a brief phone conversation. A formal RPL assessment by a qualified assessor is required to confirm eligibility and outcomes. All qualifications are issued through Asset College (RTO 31718).
 
-Use Australian English spelling (recognised, organisation, defence, colour).`,
+Use Australian English spelling (recognised, organisation, defence, colour).`;
+
+          const competencyAnalysis = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 2000,
+            system: reportPrompt + '\n\nUse Australian English spelling (recognised, organisation, defence, colour).',
             messages: [{ role: 'user', content: `Call transcript:\n\n${transcript.substring(0, 4000)}` }],
           });
 
           const competencyReport = competencyAnalysis.content[0]?.text || '';
           console.log(`[Competency] Report generated: ${competencyReport.length} chars`);
 
-          // Extract the score from the report
-          const scoreMatch = competencyReport.match(/READINESS SCORE:\s*(\d+)/);
+          // Extract the score from the report — handles both RPL READINESS SCORE and SUITABILITY SCORE
+          const scoreMatch = competencyReport.match(/(?:READINESS|SUITABILITY) SCORE:\s*(\d+)/);
           const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
 
           // Store full report in GHL as note
@@ -1334,6 +1381,9 @@ Use Australian English spelling (recognised, organisation, defence, colour).`,
             recordingUrl: recordingUrl || '',
             background: competencyData.background || '',
             duration: duration,
+            audience: competencyData.audience || 'services',
+            brandColour: competencyData.brandColour || '#F5A800',
+            rplUrl: competencyData.rplUrl || 'https://www.3cir.com/services/rpl-assessment-form/',
           }, { timeout: 15000 }).then(() => {
             console.log(`[Competency] Webhook sent — both emails will fire`);
           }).catch(e => console.error(`[Competency Webhook] ${e.message}`));
@@ -1519,7 +1569,7 @@ DO NOT use the word "mate". Use Australian English. Be professional but warm.`;
 // then generates a competency map from the transcript and emails results.
 // ============================================================
 app.post('/api/competency-call', async (req, res) => {
-  const { firstName, lastName, phone, email, qualCode, qualName, background } = req.body;
+  const { firstName, lastName, phone, email, qualCode, qualName, background, audience } = req.body;
 
   if (!firstName) return res.status(400).json({ ok: false, error: 'First name is required' });
   if (!phone) return res.status(400).json({ ok: false, error: 'Phone number is required' });
@@ -1530,10 +1580,19 @@ app.post('/api/competency-call', async (req, res) => {
   const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;
   if (!vapiKey || !phoneNumberId) return res.status(500).json({ ok: false, error: 'Voice calling not configured' });
 
+  const aud = audience || 'services';
   const normPhone = ghl.normalisePhone(phone);
   const fullName = [firstName, lastName].filter(Boolean).join(' ');
   const qualDisplay = qualName || 'a qualification';
   const bgContext = background ? `Their background: ${background}.` : '';
+
+  // Brand config per audience
+  const brandConfig = {
+    services: { colour: '#F5A800', tag: 'src:Competency Call — Services', rplUrl: 'https://www.3cir.com/services/rpl-assessment-form/' },
+    public: { colour: '#1b8466', tag: 'src:Competency Call — Public', rplUrl: 'https://www.3cir.com/public/rpl-assessment-form/' },
+    online: { colour: '#1565C0', tag: 'src:Competency Call — Online', rplUrl: 'https://3cironline.edu.au' },
+  };
+  const brand = brandConfig[aud] || brandConfig.services;
 
   // Create GHL contact immediately
   const contactResult = await ghl.upsertContact({
@@ -1541,51 +1600,90 @@ app.post('/api/competency-call', async (req, res) => {
     lastName: lastName || '',
     email: email,
     phone: normPhone,
-    source: 'AI Competency Call',
-    tags: ['src:AI Competency Call', 'competency-assessment', `qual:${qualName}`],
+    source: aud === 'online' ? 'Course Suitability Call' : 'Competency Call',
+    tags: [brand.tag, 'competency-assessment', `qual:${qualName}`],
   });
   const contactId = contactResult.ok ? contactResult.contactId : null;
 
   if (contactId) {
+    const oppSource = aud === 'online' ? 'Course Suitability Call' : 'Competency Call';
     await ghl.createOpportunity(contactId, {
-      title: `Competency Call — ${fullName} — ${qualDisplay}`,
+      title: `${aud === 'online' ? 'Course Call' : 'Competency Call'} — ${fullName} — ${qualDisplay}`,
       stageId: '449fc1c2-9c41-40ff-9c37-a09a289955b7',
-      source: 'AI Competency Call',
+      source: oppSource,
     }).catch(e => console.error(`[Competency] Opp failed: ${e.message}`));
 
-    await ghl.addNote(contactId, `COMPETENCY ASSESSMENT REQUESTED\nQualification: ${qualCode} ${qualName}\nBackground: ${background || 'Not provided'}\nEmail: ${email}\nPhone: ${normPhone}\nTimestamp: ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}\n\nAI competency call being triggered now. Results will be added as a note once the call completes.`).catch(() => {});
+    await ghl.addNote(contactId, `COMPETENCY ASSESSMENT REQUESTED\nAudience: ${aud}\nQualification: ${qualCode} ${qualName}\nBackground: ${background || 'Not provided'}\nEmail: ${email}\nPhone: ${normPhone}\nTimestamp: ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}\n\nCall being triggered now. Results will be added as a note once the call completes.`).catch(() => {});
   }
 
-  // Build the competency-specific prompt for Vapi
-  const competencyPrompt = `You are Steve, a senior assessor from 3CIR conducting a FREE 5-minute competency assessment call for ${firstName}. They are interested in ${qualDisplay} (code: ${qualCode || 'TBC'}). ${bgContext}
+  // Build audience-specific Vapi prompt
+  let competencyPrompt;
+  if (aud === 'online') {
+    competencyPrompt = `You are Steve, a senior course advisor from 3CIR conducting a FREE 5-minute course suitability assessment call for ${firstName}. They are interested in studying ${qualDisplay} online. ${bgContext}
 
-YOUR GOAL: Ask 6-8 targeted questions to assess their RPL (Recognition of Prior Learning) readiness for this qualification. You need to understand their work experience, skills, leadership exposure, and evidence availability.
+YOUR GOAL: Ask 6-8 targeted questions to understand their goals, experience level, and learning preferences to recommend the best online study pathway.
 
 CRITICAL RULES:
 - Use Australian English. Be warm and professional. Do NOT use the word "mate".
-- Keep the call to 5 minutes maximum. Be efficient but not rushed.
+- Keep the call to 5 minutes maximum.
+- Do NOT guarantee outcomes.
+- IMPORTANT: Make clear during the call that this is a guided conversation only. A detailed assessment would need to be conducted to provide precise eligibility and qualification information. Say something like: "Just so you know, this is a preliminary conversation to give you a general idea. For precise information about your eligibility, we would need to conduct a detailed assessment."
+- At the end, tell them their personalised study plan will be emailed within a few minutes.
+
+QUESTION FLOW — adapt to their answers:
+1. GOALS: "Can you tell me what you are hoping to achieve with this qualification? Is it for career advancement, a job requirement, or personal development?"
+2. CURRENT ROLE: "What is your current role, and how long have you been working in this field?"
+3. EXPERIENCE LEVEL: "Have you done any formal study or training in this area before?"
+4. RPL CHECK: "Based on what you have told me, you might actually qualify for RPL — Recognition of Prior Learning — which means your existing experience could be assessed and you could receive the qualification much faster, sometimes in just 2-6 weeks instead of months of study. Would you like us to check your RPL eligibility as well?"
+5. LEARNING STYLE: "How do you prefer to learn? Are you someone who likes to work through material at your own pace, or do you prefer more structured guidance?"
+6. TIME COMMITMENT: "How many hours per week could you realistically dedicate to study?"
+7. TIMELINE: "Is there a particular timeframe you are working to — for example, a promotion opportunity or a job application?"
+8. WRAP UP: "Thank you ${firstName}. Based on everything you have shared, I will put together a personalised study recommendation and email it to you within the next few minutes. A course advisor from 3CIR may also follow up to discuss your options in more detail."
+
+Key pricing:
+- Online study typically costs $750 to $4,450 depending on the level
+- Self-paced via Cloud Assess platform
+- Standard pace: 1 unit per month. Accelerated: 2 units per month
+- Payment plans: Afterpay, Zip, Klarna, weekly direct debit
+- The online study platform is at 3cironline.edu.au
+
+ABOUT 3CIR: Veteran-owned qualification provider, 225+ five-star reviews, qualifications issued through Asset College (RTO 31718). 100% online, self-paced study with dedicated trainer support.`;
+  } else {
+    const audienceContext = aud === 'services'
+      ? `They are military or emergency services personnel. Use service-aware language. Understand military rank structures and emergency services backgrounds. All prices include the 25% discount for service personnel.`
+      : `They are from the general public exploring RPL for career development. Be encouraging and approachable.`;
+
+    competencyPrompt = `You are Steve, a senior assessor from 3CIR conducting a FREE 5-minute competency assessment call for ${firstName}. They are interested in ${qualDisplay} (code: ${qualCode || 'TBC'}). ${bgContext}
+
+${audienceContext}
+
+YOUR GOAL: Ask 6-8 targeted questions to assess their RPL (Recognition of Prior Learning) readiness for this qualification.
+
+CRITICAL RULES:
+- Use Australian English. Be warm and professional. Do NOT use the word "mate".
+- Keep the call to 5 minutes maximum.
 - Do NOT guarantee outcomes — this is a preliminary assessment only.
+- IMPORTANT: Make clear during the call that this is a guided conversation only. A detailed RPL assessment would need to be conducted to provide precise eligibility and qualification information. Say something like: "Just so you know, this conversation gives you a general indication. For precise information about your eligibility, we would need to conduct a detailed RPL assessment, which is free and takes about 30 seconds to start."
 - At the end, tell them their results will be emailed within a few minutes.
 
 QUESTION FLOW — adapt to their answers, skip questions already answered:
 1. ROLE & EXPERIENCE: "Can you tell me about your current or most recent role, and how long you have been in the field?"
-2. RESPONSIBILITIES: "What are the main responsibilities you handle day to day?" (Listen for management, planning, compliance, team leadership, project delivery, risk management, etc.)
+2. RESPONSIBILITIES: "What are the main responsibilities you handle day to day?"
 3. LEADERSHIP: "Have you supervised or managed any staff, or led any teams or projects?" (If yes: "How many people, and what did that involve?")
-4. SPECIFIC SKILLS: Ask 1-2 questions specific to their target qualification area. For Leadership — strategic planning, budgets, stakeholder engagement. For WHS — hazard identification, risk assessment, incident investigation. For Project Management — scope, schedules, stakeholder communication. For Security — threat assessment, security planning, personnel vetting. For HR — recruitment, performance management, industrial relations. For Business — operations, governance, financial oversight.
+4. SPECIFIC SKILLS: Ask 1-2 questions specific to their target qualification area. For Leadership — strategic planning, budgets, stakeholder engagement. For WHS — hazard identification, risk assessment, incident investigation. For Project Management — scope, schedules, stakeholder communication. For Security — threat assessment, security planning, personnel vetting. For HR — recruitment, performance management, industrial relations.
 5. TRAINING: "Have you completed any formal training, courses, or qualifications related to this field?"
 6. EVIDENCE: "What kind of documentation do you have available — things like position descriptions, performance reviews, training certificates, or reference letters?"
-7. TIMELINE: "Is there a particular timeframe you are working to? For example, a career move or a job application?"
-8. WRAP UP: "Thank you ${firstName}, that is everything I need. Based on what you have shared, I will generate your personalised competency assessment and email it to you within the next few minutes. A senior assessor from 3CIR may also follow up to discuss your results. Thanks for your time today."
+7. TIMELINE: "Is there a particular timeframe you are working to?"
+8. WRAP UP: "Thank you ${firstName}, that is everything I need. Based on what you have shared, I will generate your personalised competency assessment and email it to you within the next few minutes. A senior assessor from 3CIR may also follow up to discuss your results."
 
-If they ask about pricing, you can mention:
-- ${qualDisplay} through RPL typically costs between $862 and $2,737 depending on the level
-- 25% discount for military and emergency services personnel
-- Payment plans available through Afterpay, Zip, and weekly direct debit
-- The free RPL assessment form at 3cir.com is the next step after reviewing their competency results
-
-If they want to speak to a human, say you will arrange a callback and confirm their preferred time.
+Key pricing:
+- RPL typically costs between $412 and $2,737 depending on the level
+- ${aud === 'services' ? '25% discount for military and emergency services personnel already included in those prices' : 'Payment plans available'}
+- Payment plans: Afterpay, Zip, Klarna, weekly direct debit
+- Free RPL assessment form at 3cir.com is the next step
 
 ABOUT 3CIR: Veteran-owned RPL provider, 225+ five-star reviews, qualifications issued through Asset College (RTO 31718). Free RPL assessment, no obligation.`;
+  }
 
   try {
     const response = await axios.post('https://api.vapi.ai/call/phone', {
@@ -1598,7 +1696,9 @@ ABOUT 3CIR: Veteran-owned RPL provider, 225+ five-star reviews, qualifications i
           messages: [{ role: 'system', content: competencyPrompt }],
         },
         voice: { provider: '11labs', voiceId: 'aGkVQvWUZi16EH8aZJvT', model: 'eleven_turbo_v2_5' },
-        firstMessage: `Hi ${firstName}, this is Steve from 3CIR. Thanks for requesting a free competency assessment. I have about 6 quick questions to understand your background and map your experience to the ${qualDisplay}. It will only take about 5 minutes. Is now a good time?`,
+        firstMessage: aud === 'online'
+          ? `Hi ${firstName}, this is Steve from 3CIR. Thanks for requesting a free course suitability assessment. I have about 6 quick questions to understand your goals and help find the best online qualification for you. It will only take about 5 minutes. Is now a good time?`
+          : `Hi ${firstName}, this is Steve from 3CIR. Thanks for requesting a free competency assessment. I have about 6 quick questions to understand your background and map your experience to the ${qualDisplay}. It will only take about 5 minutes. Is now a good time?`,
         transcriber: { provider: 'deepgram' },
         serverUrl: 'https://threecir-ai-assistant.onrender.com/api/voice-callback',
       },
@@ -1613,8 +1713,9 @@ ABOUT 3CIR: Veteran-owned RPL provider, 225+ five-star reviews, qualifications i
     competencyCalls.set(normPhone, {
       firstName, lastName, email, qualCode, qualName, background,
       contactId, callId, timestamp: Date.now(),
+      audience: aud, brandColour: brand.colour, rplUrl: brand.rplUrl,
     });
-    console.log(`[Competency] Stored in map: key="${normPhone}", contactId=${contactId}, qual=${qualName}, mapSize=${competencyCalls.size}`);
+    console.log(`[Competency] Stored in map: key="${normPhone}", contactId=${contactId}, qual=${qualName}, audience=${aud}, mapSize=${competencyCalls.size}`);
     // Auto-expire after 30 minutes
     setTimeout(() => competencyCalls.delete(normPhone), 30 * 60 * 1000);
 
@@ -1646,7 +1747,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.1.0');
+  console.log('  3CIR AI ASSISTANT v2.1.2');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
