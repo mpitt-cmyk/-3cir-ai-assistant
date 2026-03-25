@@ -25,6 +25,19 @@ const smsService = require('./services/sms');
 const evidenceScanRouter = require('./routes/evidence-scan');
 
 // ============================================================
+// WEBHOOK SIGNATURE VERIFICATION
+// ============================================================
+function verifyWebhookSignature(req) {
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!secret) return true;
+  const sig = req.headers['x-webhook-signature'];
+  if (!sig) return false;
+  const crypto = require('crypto');
+  const expected = crypto.createHmac('sha256', secret).update(JSON.stringify(req.body)).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+}
+
+// ============================================================
 // CONFIG
 // ============================================================
 const PORT = process.env.PORT || 3000;

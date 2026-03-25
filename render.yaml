@@ -45,3 +45,5 @@ services:
         sync: false
       - key: REFRESH_SECRET
         sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
