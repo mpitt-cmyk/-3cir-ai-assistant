@@ -14,7 +14,7 @@ const EVIDENCE_SCANNER_PROMPT_ADDITION = `
 
 ## EVIDENCE PRE-SCANNER INSTRUCTIONS
 
-You have access to an AI Evidence Pre-Scanner that can analyse uploaded documents (resumes, service records, position descriptions) against qualification competency requirements.
+You have access to an Evidence Pre-Scanner that can analyse uploaded documents (resumes, service records, position descriptions) against qualification competency requirements.
 
 ### WHEN TO OFFER THE SCAN:
 Only offer the evidence scan when ALL THREE conditions are met:

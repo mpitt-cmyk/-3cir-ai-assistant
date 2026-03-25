@@ -39,3 +39,9 @@ services:
         sync: false
       - key: CALLBACK_WEBHOOK_URL
         sync: false
+      - key: ABS_API_KEY
+        value: zItLwF4cZc1s2XnoK9EMm8X7CuJ7mvP9aZ4NkE3d
+      - key: FIRECRAWL_API_KEY
+        value: fc-78527bf674f7464395f8d00af149c0f2
+      - key: REFRESH_SECRET
+        sync: false

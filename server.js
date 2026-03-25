@@ -17,6 +17,7 @@ const { buildSystemPrompt, detectAudience, OPENING_MESSAGES, QUICK_REPLIES, QUAL
 const ghl = require('./services/ghl');
 const seek = require('./services/seek');
 const abs = require('./services/abs');
+const siteCrawler = require('./services/site-crawler');
 const messenger = require('./services/messenger');
 const smsService = require('./services/sms');
 
@@ -32,7 +33,8 @@ const MAX_MSG_LENGTH = 2000;
 const MAX_HISTORY = 20;
 const INACTIVITY_MINUTES = 30;
 const INACTIVITY_CHECK_MS = 60000;
-const SEEK_REFRESH_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SEEK_REFRESH_MS = 24 * 60 * 60 * 1000;    // 24 hours
+const CRAWLER_REFRESH_MS = 24 * 60 * 60 * 1000;  // 24 hours
 
 // ============================================================
 // STARTUP
@@ -364,6 +366,13 @@ const seekRefresher = setInterval(() => {
 }, SEEK_REFRESH_MS);
 
 // ============================================================
+// SITE CRAWLER DAILY REFRESH — runs every 24 hours
+// ============================================================
+const crawlerRefresher = setInterval(() => {
+  siteCrawler.refresh().catch(err => console.error('[Crawler] Daily refresh error: ' + err.message));
+}, CRAWLER_REFRESH_MS);
+
+// ============================================================
 // LEAD CAPTURE
 // ============================================================
 async function attemptLeadCapture(s) {
@@ -427,14 +436,15 @@ async function attemptLeadCapture(s) {
 // ROUTES
 // ============================================================
 app.get('/health', (req, res) => res.json({
-  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.1.5',
+  status: 'ok', uptime: Math.round(process.uptime()), sessions: sessions.keys().length, version: '2.2.0',
   seek: { cached: seek.getCacheSize(), lastRefresh: seek.getLastRefresh() },
-  abs: { live: abs.isLive() },
+  abs: { live: abs.isLive(), lastRefresh: abs.getLastRefresh() },
+  crawler: { hasActiveSale: siteCrawler.hasActiveSale(), lastCrawl: siteCrawler.getLastCrawl(), firecrawlConfigured: !!process.env.FIRECRAWL_API_KEY },
   features: { sms: !!process.env.GHL_WORKFLOW_SMS_URL, email: !!process.env.GHL_WORKFLOW_EMAIL_URL, escalation: !!process.env.ESCALATION_WEBHOOK_URL, callback: !!process.env.CALLBACK_WEBHOOK_URL, analytics: !!process.env.ANALYTICS_WEBHOOK_URL, fileUpload: !!process.env.FILE_UPLOAD_WEBHOOK_URL, evidenceScanner: true, competencyCall: !!process.env.VAPI_API_KEY },
   channels: { messenger: !!process.env.META_PAGE_ACCESS_TOKEN, sms: !!process.env.TWILIO_ACCOUNT_SID, whatsapp: !!process.env.TWILIO_WHATSAPP_FROM },
 }));
 
-app.get('/', (req, res) => res.json({ name: '3CIR AI Assistant', version: '2.1.5', status: 'running' }));
+app.get('/', (req, res) => res.json({ name: '3CIR Assistant', version: '2.2.0', status: 'running' }));
 
 // Standalone chat pages — shareable URLs for emails, social, QR codes
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat-services.html')));
@@ -444,6 +454,36 @@ app.get('/competency-call', (req, res) => res.sendFile(path.join(__dirname, 'pub
 app.get('/competency-call/services', (req, res) => res.sendFile(path.join(__dirname, 'public', 'competency-call.html')));
 app.get('/competency-call/public', (req, res) => res.sendFile(path.join(__dirname, 'public', 'competency-call-public.html')));
 app.get('/competency-call/online', (req, res) => res.sendFile(path.join(__dirname, 'public', 'competency-call-online.html')));
+
+// ============================================================
+// POST /refresh-cache — manually trigger site crawl + ABS refresh
+// ============================================================
+app.post('/refresh-cache', async (req, res) => {
+  // Simple token guard — set REFRESH_SECRET env var to protect this endpoint
+  const secret = process.env.REFRESH_SECRET;
+  if (secret && req.headers['x-refresh-secret'] !== secret) {
+    return res.status(401).json({ ok: false, error: 'Unauthorised' });
+  }
+
+  console.log('[Refresh Cache] Manual refresh triggered');
+  const results = {};
+
+  try {
+    const siteResult = await siteCrawler.refresh();
+    results.crawler = { ok: true, hasActiveSale: siteResult?.hasActiveSale, crawledAt: siteResult?.crawledAt };
+  } catch (err) {
+    results.crawler = { ok: false, error: err.message };
+  }
+
+  try {
+    const absOk = await abs.fetchLiveData();
+    results.abs = { ok: absOk, live: abs.isLive() };
+  } catch (err) {
+    results.abs = { ok: false, error: err.message };
+  }
+
+  res.json({ ok: true, results, refreshedAt: new Date().toISOString() });
+});
 
 app.post('/api/session', (req, res) => {
   const { referrerUrl } = req.body;
@@ -497,9 +537,10 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
 
   const msgs = s.messages.map(m => ({ role: m.role, content: m.content }));
 
-  // Build system prompt with SEEK job data and ABS labour data
+  // Build system prompt with SEEK job data, ABS labour data, and cached site data
   const seekData = seek.getJobDataSummary();
   const absData = abs.getLabourDataSummary();
+  const siteData = siteCrawler.getSummary();
 
   // === EVIDENCE SCANNER: Add file context to system prompt so Claude knows about uploads ===
   let fileContext = '';
@@ -515,7 +556,7 @@ app.post('/api/chat', chatLimiter, async (req, res) => {
     }
     console.log(`[Evidence Debug] File context added to prompt. Files: ${fileNames}, hasContact: ${hasContact}, hasQuals: ${hasQuals}, hasBuffer: ${!!s.uploadedFileBuffer}`);
   }
-  const fullSystemPrompt = buildSystemPrompt(s.audience, pageUrl || '', seekData, absData) + fileContext;
+  const fullSystemPrompt = buildSystemPrompt(s.audience, pageUrl || '', seekData, absData, siteData) + fileContext;
 
   // === EVIDENCE SCANNER: Auto-trigger scan when conditions are met ===
   // Three trigger paths:
@@ -987,6 +1028,7 @@ async function channelChat(sessionKey, userMessage, platform, audience) {
 
   const seekData = seek.getJobDataSummary();
   const absData = abs.getLabourDataSummary();
+  const siteData = siteCrawler.getSummary();
 
   // Channel-specific system prompt additions
   let channelNote = '';
@@ -998,7 +1040,7 @@ async function channelChat(sessionKey, userMessage, platform, audience) {
     channelNote = `\n\nCHANNEL: ${platform === 'instagram' ? 'Instagram DM' : 'Facebook Messenger'}. Keep responses conversational and concise — max 3-4 short paragraphs. People expect chat-style replies. If they want more detail, direct them to the chatbot on the website or the RPL form.`;
   }
 
-  const systemPrompt = buildSystemPrompt(s.audience, '', seekData, absData) + channelNote;
+  const systemPrompt = buildSystemPrompt(s.audience, '', seekData, absData, siteData) + channelNote;
   const msgs = s.messages.slice(-20).map(m => ({ role: m.role, content: m.content }));
 
   try {
@@ -1766,7 +1808,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ============================================================
 app.listen(PORT, async () => {
   console.log('============================================================');
-  console.log('  3CIR AI ASSISTANT v2.1.5');
+  console.log('  3CIR ASSISTANT v2.2.0');
   console.log(`  Port:     ${PORT}`);
   console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Origins:  ${ALLOWED_ORIGINS.join(', ')}`);
@@ -1782,16 +1824,24 @@ app.listen(PORT, async () => {
   console.log(`  SMS:      ${process.env.TWILIO_ACCOUNT_SID ? 'ON' : 'OFF'}`);
   console.log(`  WhatsApp: ${process.env.TWILIO_WHATSAPP_FROM ? 'ON' : 'OFF'}`);
   console.log(`  SEEK:     ${seek.getCacheSize()} qualifications cached`);
-  console.log(`  ABS:      ${process.env.ABS_API_KEY ? 'Live API' : 'Baseline data'}`);
+  console.log(`  ABS:      ${process.env.ABS_API_KEY ? 'Live API key configured' : 'Baseline data (set ABS_API_KEY to enable live)'}`);
+  console.log(`  Crawler:  ${process.env.FIRECRAWL_API_KEY ? 'Firecrawl enabled' : 'No FIRECRAWL_API_KEY set'}`);
   console.log(`  Evidence: ON (auto-trigger on upload)`);
   console.log('============================================================');
 
-  // Initial SEEK refresh (runs in background, doesn't block startup)
+  // Initial SEEK refresh (non-blocking)
   seek.refreshAll().catch(err => console.error('[SEEK] Initial refresh error: ' + err.message));
 
-  // Check ABS API if key is set
+  // Initial ABS live data fetch (non-blocking)
   if (process.env.ABS_API_KEY) {
-    abs.fetchLiveData().catch(err => console.error('[ABS] ' + err.message));
+    abs.fetchLiveData()
+      .then(() => abs.startDailyRefresh())
+      .catch(err => console.error('[ABS] ' + err.message));
+  }
+
+  // Initial site crawl (non-blocking — populates cached-site-data.json)
+  if (process.env.FIRECRAWL_API_KEY) {
+    siteCrawler.refresh().catch(err => console.error('[Crawler] Initial crawl error: ' + err.message));
   }
 });
 
